@@ -1,0 +1,50 @@
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+///// Grammar For ORthodox //////////// Grammar For ORthodox //////////// Grammar For ORthodox ///////
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+
+-- block, expressions, literals ------>
+
+block       -> "{" [ ASSIGNMENT | VAR_UPDATE | expr ]* "}"
+
+expr        -> literals expr | OPERATOR expr | fn_call expr | block_expr    | break_expr  | return_expr | if_expr       | for_expr    | NULL
+
+fn_call     -> IDENTIFIER "(" [ expr ","? ]* ")"
+if_expr     -> "if" expr "{" block "}" [ "elif" expr "{" block "}"]* [ "else" expr "{" block "}"]
+for_expr    -> "for" IDENTIFIER "in" expr ":" expr "{" block "}"
+break_expr  -> "break" expr
+return_expr -> "return" expr
+
+literals    -> number | string | IDENTIFIER | member_access
+
+member_access ->  IDENTIFIER [ "." IDENTIFIER ]+
+
+------------------------------------end
+
+
+ASSIGNMENT  ->  IDENTIFIER "::" type [ "=" expr ]?
+VAR_UPDATE  ->  IDENTIFIER UPDATE_OPERATOR expr
+
+
+-- all valid types ----------------->
+
+type -> number_type | string_type | char_type 
+    | pointer_type
+    | reference_type
+    | array_type
+    | record_type 
+
+number_type -> "mut"? ["i8" | "i16" | "i32" | "i64" | "f32" | "f64" | "f128" | "u8" | "u16" | "u32"]
+string_type -> "mut"? "string"
+char_type   -> "mut"? "char"
+
+pointer_type   -> "mut"? "*" type
+reference_type -> "mut"? "@" type
+array_type     -> "mut"? "[" SIZE "]" type
+record_type    -> "mut"? IDENTIFIER
+
+----------------------------------end
+
+SIZE             -> [0-9]+
+OPERATOR         -> "+" | "-" | "*"["*"]? | "/" | "%" | ">" ["=" | ">"]? | "<" ["=" | "<"]?  | "==" | "!" ["="]? 
+UPDATE_OPERATOR  -> [ "+" | "-" | "*"["*"]? | "/" | "%" ]? "="
+IDENTIFIER       -> [a-zA-Z][a-zA-Z0-9_]*
