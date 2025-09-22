@@ -735,7 +735,19 @@ pub const Parser = struct {
                             }
                         };
 
+                        self.expect_advance_token(.base_semicolon);
+
                         block_elem.append(update) catch @panic("could not add to block_elem in parse_block_expr\n");
+
+                    } else { // EXPRESSION
+                        
+                        const expr = BLOCK_ELEMENTS {
+                            .EXPRESSION = self.parse_expr().*,
+                        };
+
+                        self.expect_advance_token(.base_semicolon);
+
+                        block_elem.append(expr) catch @panic("could not add to block_elem, in parse_block_expr\n");
 
                     }
 
@@ -744,9 +756,15 @@ pub const Parser = struct {
 
                 .base_right_braces => break,
 
-                else => {
-                    print("got :: {any}\n", .{tok});
-                    @panic("in block_expr, panic for now\n");
+                else => { // EXPRESSION
+
+                        const expr = BLOCK_ELEMENTS {
+                            .EXPRESSION = self.parse_expr().*,
+                        };
+
+                        self.expect_advance_token(.base_semicolon);
+
+                        block_elem.append(expr) catch @panic("could not add to block_elem, in parse_block_expr\n");
                 },
 
 
@@ -766,8 +784,6 @@ pub const Parser = struct {
     // is peek_token a binary-operator
     pub fn is_operator(self: *Self) bool {
         
-        //
-        // does not include, .base_left|right_shift
         switch(self.peek_token().kind) {
             
             .base_add, .base_sub,
@@ -776,6 +792,7 @@ pub const Parser = struct {
             .base_equal, .base_not_equal,
             .base_lt, .base_gt,
             .base_le, .base_ge,
+            .base_left_shift, .base_right_shift,
             .base_bitwise_and, .base_bitwise_or,
             .keyword_and, .keyword_or =>
             return true,
@@ -803,6 +820,8 @@ pub const Parser = struct {
             .base_div => UPDATE_OPERATORS.DIV_EQ,
             .base_mod => UPDATE_OPERATORS.MOD_EQ,
             .base_exp => UPDATE_OPERATORS.EXP_EQ,
+            .base_left_shift => UPDATE_OPERATORS.LEFT_SHIFT_EQ,
+            .base_right_shift => UPDATE_OPERATORS.RIGHT_SHIFT_EQ,
             .base_bitwise_and => UPDATE_OPERATORS.BITWISE_AND_EQ,
             .base_bitwise_or => UPDATE_OPERATORS.BITWISE_OR_EQ,
 
@@ -918,6 +937,7 @@ test "parser construction" {
     defer parser.dealloc();
 
     parser.expect_advance_token(.directive_mod);
+    print("passed..\n\n", .{});
 }
 
 test "parse number types" {
@@ -926,7 +946,7 @@ test "parse number types" {
     var parser = Parser.init_for_tests("mut f128");
     print("{any}\n", .{parser.parse_type()});
 
-    print("\n\n", .{});
+    print("passed..\n\n", .{});
 }
 
 test "parse pointer types" {
@@ -938,7 +958,7 @@ test "parse pointer types" {
 
     // print("{any}\n", .{parsed_ptr.pointer.ptr_to});
 
-    print("\n\n", .{});
+    print("passed..\n\n", .{});
 }
 
 test "parse reference types" {
@@ -949,7 +969,7 @@ test "parse reference types" {
 
     print("{any}\n", .{parsed_ref.reference.reference_to});
 
-    print("\n\n", .{});
+    print("passed..\n\n", .{});
 }
 
 test "parse array types" {
@@ -962,7 +982,7 @@ test "parse array types" {
     print("len  -> {s}\n", .{parsed_array.array.len});
     print("type -> {any}\n", .{parsed_array.array.lonely_type});
 
-    print("\n\n", .{});
+    print("passed..\n\n", .{});
 }
 
 test "parse struct types" {
@@ -974,7 +994,7 @@ test "parse struct types" {
     print("{any}\n", .{parsed_struct.record});
     print("struct_name -> {s}\n", .{parsed_struct.record.record_name});
 
-    print("\n\n", .{});
+    print("passed..\n\n", .{});
 }
 
 // 
@@ -988,7 +1008,7 @@ test "parse enum types" {
     print("{any}\n", .{parsed_enum.record});
     print("enum_name -> {s}\n", .{parsed_enum.record.record_name});
 
-    print("\n\n", .{});
+    print("passed..\n\n", .{});
 }
 
 test "parse literal numbers" {
@@ -1000,7 +1020,7 @@ test "parse literal numbers" {
     print("{any}\n", .{parsed_num_literal});
     print("number -> {s}\n", .{parsed_num_literal.number.inner_value});
 
-    print("\n\n", .{});
+    print("passed..\n\n", .{});
 }
 
 test "parse literal string" {
@@ -1012,7 +1032,7 @@ test "parse literal string" {
     print("{any}\n", .{parsed_string});
     print("string -> {s}\n", .{parsed_string.string.inner_value});
 
-    print("\n\n", .{});
+    print("passed..\n\n", .{});
 }
 
 test "parse literal variables" {
@@ -1024,7 +1044,7 @@ test "parse literal variables" {
     print("{any}\n", .{parsed_var});
     print("var-name -> {s}\n", .{parsed_var.variable.inner_value});
 
-    print("\n\n", .{});
+    print("passed..\n\n", .{});
 }
 
 //
@@ -1043,7 +1063,7 @@ test "parse literal member_access" {
         print(".{s}", .{member_name});
     }
 
-    print("\n\n", .{});
+    print("passed..\n\n", .{});
 }
 
 test "parse simple literal expr" {
@@ -1054,7 +1074,7 @@ test "parse simple literal expr" {
 
     print("{any}\n::{any}\n::{any}\n", .{parsed.inner_literal, parsed.inner_expr.operator_expr, parsed.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal});
 
-    print("\n\n", .{});
+    print("passed..\n\n", .{});
 }
 
 test "parse simple literal expr2" {
@@ -1064,7 +1084,8 @@ test "parse simple literal expr2" {
     print("{any}\n", .{parsed.inner_literal.member_access});
     print("{any}\n", .{parsed.inner_expr.operator_expr});
     print("{any}\n", .{parsed.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal});
-    print("\n\n", .{});
+
+    print("passed..\n\n", .{});
 }
 
 test "parse simple literal expr3" {
@@ -1081,7 +1102,7 @@ test "parse simple literal expr3" {
     print("{any}\n", .{parsed.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_operator});
     print("{s}\n", .{parsed.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal.number.inner_value});
 
-    print("\n\n", .{});
+    print("passed..\n\n", .{});
 }
 
 
@@ -1109,7 +1130,7 @@ test "parse simple function expr3" {
     }
 
 
-    print("\n\n", .{});
+    print("passed..\n\n", .{});
 }
 
 
@@ -1118,7 +1139,7 @@ test "parse simple function expr4" {
     const parsed = parser.parse_expr().fn_call_expr;
     _ = parsed;
 
-    print("\n\n", .{});
+    print("passed..\n\n", .{});
 }
 
 test "parse block expr" {
@@ -1130,22 +1151,42 @@ test "parse block expr" {
         print("{any}\n", .{item});
     }
 
-    print("\n\n", .{});
+    print("passed..\n\n", .{});
 }
 
 test "check-operator" {
     print("--- TEST: CHECK OPERATOR\n", .{});
-    var parser = Parser.init_for_tests("=");
-    parser.show_full_token_list();
+    var parser = Parser.init_for_tests("<<=");
+    print("{any}\n", .{parser.is_operator()});
+    print("{any}\n", .{parser.is_update_operator()});
 
-    print("\n\n", .{});
+    print("passed..\n\n", .{});
 }
 
-// test "check update-expr" {
-//     print("--- TEST: CHECK UPDATE_EXPRESSION\n", .{});
-//     var parser = Parser.raw_init_with_file("./file.ox");
-//     const parsed = parser.parse_block_expr();
-//     _ = parsed;
-//
-//     print("\n\n", .{});
-// }
+test "check assign-expr" {
+    print("--- TEST: CHECK ASSIGN_EXPRESSION\n", .{});
+    var parser = Parser.init_for_tests("{ x :: i32 =1; y :: mut u8; }");
+    const parsed = parser.parse_block_expr();
+    _ = parsed;
+
+    print("passed..\n\n", .{});
+}
+
+
+test "check update-expr" {
+    print("--- TEST: CHECK UPDATE_EXPRESSION\n", .{});
+    var parser = Parser.init_for_tests("{ x >>= 32; y /= \"some string\"; z :: mut f64; }");
+    const parsed = parser.parse_block_expr();
+    _ = parsed;
+
+    print("passed..\n\n", .{});
+}
+
+test "check block-expr" {
+    print("--- TEST: CHECK BLOCK_EXPRESSION\n", .{});
+    var parser = Parser.init_for_tests("{ x >>= 32; y /= \"some string\"; z :: mut f64; a + b; 100 + 200;}");
+    const parsed = parser.parse_block_expr();
+    _ = parsed;
+
+    print("passed..\n\n", .{});
+}
