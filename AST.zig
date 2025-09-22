@@ -100,7 +100,7 @@ pub const BLOCK_ELEMENTS = union(enum) {
 pub const UPDATE_OPERATORS = enum {
     
     ADD_EQ,
-    MIN_EQ,
+    MINUS_EQ,
     MUL_EQ,
     DIV_EQ,
     MOD_EQ,

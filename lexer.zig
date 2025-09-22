@@ -286,7 +286,7 @@ pub const StreamLexer = struct {
         // no backtracking, if already called 'advance' do not call it again
         var already_skipped = false;
 
-        switch (self.source[self.pos]) {
+        switch (self.peek().?) {
             '(' => id = .base_left_paren,
             ')' => id = .base_right_paren,
             '{' => id = .base_left_braces,
@@ -297,97 +297,110 @@ pub const StreamLexer = struct {
             '|' => id = .base_bitwise_or,
             ',' => id = .base_comma,
             ':' => {
-                if (self.peek()) |_| {
-                    _ = self.advance();
-                    if (self.peek()) |c| {
-                        if (c == ':') {
-                            id = .base_type_colon;
-                        } else id = .base_colon;
-                    }
-                }
+
+                _ = self.advance();
+
+                if (self.peek()) |c| {
+                    if (c == ':') {
+                        id = .base_type_colon;
+                    } else id = .base_colon;
+                } else id = .base_colon;
             },
 
             ';' => id = .base_semicolon,
             '+' => id = .base_add,
             '-' => id = .base_sub,
             '/' => id = .base_div,
+
             '*' => {
-                if (self.peek()) |_| {
-                    _ = self.advance();
-                    if (self.peek()) |c| {
-                        if (c == '*') {
-                            id = .base_exp;
-                        } else {
-                            id = .common_mul;
-                            already_skipped = true;
-                        }
+                _ = self.advance();
+
+                if (self.peek()) |c| {
+                    if (c == '*') {
+                        id = .base_exp;
+                    } else {
+                        id = .common_mul;
+                        already_skipped = true;
                     }
+                } else {
+                    id = .common_mul;
+                    already_skipped = true;
                 }
             },
+
             '%' => id = .base_mod,
+
             '!' => {
-                if (self.peek()) |_| {
-                    _ = self.advance();
+                _ = self.advance();
 
-                    if (self.peek()) |c| {
-                        if (c == '=') {
-                            id = .base_not_equal;
-                        } else {
-                            id = .common_exclamation;
-                            already_skipped = true;
-                        }
+                if (self.peek()) |c| {
+                    if (c == '=') {
+                        id = .base_not_equal;
                     }
+                    else {
+                        id = .common_exclamation;
+                        already_skipped = true;
+                    }
+                } else {
+                    id = .common_exclamation;
+                    already_skipped = true;
                 }
             },
+
             '=' => {
-                if (self.peek()) |_| {
-                    _ = self.advance();
+                _ = self.advance();
 
-                    if (self.peek()) |c| {
-                        if (c == '=') {
-                            id = .base_equal;
-                        } else {
-                            id = .base_assign;
-                            already_skipped = true;
-                        }
+                if(self.peek()) |c| {
+                    if(c == '=') {
+                        id = .base_equal;
+                    }  else {
+                        id = .base_assign;
+                        already_skipped = true;
                     }
+                } else {
+                    id = .base_assign;
+                    already_skipped = true;
                 }
+
             },
+
             '>' => {
-                if (self.peek()) |_| {
-                    _ = self.advance();
+                _ = self.advance();
 
-                    if (self.peek()) |c| {
-                        if (c == '=') {
-                            id = .base_ge;
-                            _ = self.advance();
-                        } else if (c == '>') {
-                            id = .base_left_shift;
-                            _ = self.advance();
-                        } else {
-                            id = .base_gt;
-                            already_skipped = true;
-                        }
+                if(self.peek()) |c| {
+                    if (c == '=') {
+                        id = .base_ge;
+                    } else if (c == '>') {
+                        id = .base_left_shift;
+                    } else {
+                        id = .base_gt;
+                        already_skipped = true;
                     }
+                } else {
+                    id = .base_gt;
+                    already_skipped = true;
                 }
+
+
             },
-            '<' => {
-                if (self.peek()) |_| {
-                    _ = self.advance();
 
-                    if (self.peek()) |c| {
-                        if (c == '=') {
-                            id = .base_le;
-                            _ = self.advance();
-                        } else if (c == '<') {
-                            id = .base_right_shift;
-                            _ = self.advance();
-                        } else {
-                            id = .base_lt;
-                            already_skipped = true;
-                        }
+            '<' => {
+                _ = self.advance();
+
+                if (self.peek()) |c| {
+                    if (c == '=') {
+                        id = .base_le;
+                    } else if (c == '<') {
+                        id = .base_right_shift;
+                    } else {
+                    id = .base_lt;
+                    already_skipped = true;
                     }
+                } else {
+                    id = .base_lt;
+                    already_skipped = true;
                 }
+
             },
 
             '.' => id = .base_dot,
@@ -397,11 +410,14 @@ pub const StreamLexer = struct {
 
         if(!already_skipped) _ = self.advance();
 
-        return Token{
+        const tok = Token{
             .kind = id,
             .lexeme = null,
             .span = .{self.pos, self.line},
         };
+        
+        return tok;
+
     }
 
     //

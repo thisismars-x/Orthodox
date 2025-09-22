@@ -285,6 +285,7 @@ pub const Parser = struct {
             //////////////// STRUCT, ENUMS (RECORDS) //////////////// end///
 
             else => {
+                print("got :: {any}\n", .{tok});
                 @panic("panic in parse_types\n");
             },
         }
@@ -721,7 +722,20 @@ pub const Parser = struct {
                         }
 
 
-                    } else { // UPDATE
+                    } else if(self.is_update_operator()) { // UPDATE
+
+                        const update_op = self.which_update_operator();
+                        const update_with = self.parse_literals();
+                        
+                        const update = BLOCK_ELEMENTS {
+                            .UPDATE = .{
+                                .variable_name = var_name,
+                                .UPDATE_OPERATOR = update_op,
+                                .update_with = update_with,
+                            }
+                        };
+
+                        block_elem.append(update) catch @panic("could not add to block_elem in parse_block_expr\n");
 
                     }
 
@@ -752,6 +766,8 @@ pub const Parser = struct {
     // is peek_token a binary-operator
     pub fn is_operator(self: *Self) bool {
         
+        //
+        // does not include, .base_left|right_shift
         switch(self.peek_token().kind) {
             
             .base_add, .base_sub,
@@ -760,7 +776,6 @@ pub const Parser = struct {
             .base_equal, .base_not_equal,
             .base_lt, .base_gt,
             .base_le, .base_ge,
-            .base_left_shift, .base_right_shift,
             .base_bitwise_and, .base_bitwise_or,
             .keyword_and, .keyword_or =>
             return true,
@@ -769,6 +784,30 @@ pub const Parser = struct {
             return false,
 
         }
+
+    }
+
+    // 
+    // which update-op is next, consume it
+    pub fn which_update_operator(self: *Self) UPDATE_OPERATORS {
+        if(self.is_update_operator() == false) @panic("is_update_operator returned false, in which_update_operator\n");
+
+        const operator = self.peek_token().kind;
+        self.advance_token(); // consume - operator
+        self.expect_advance_token(.base_assign); // OPERATOR should precede .base_assign in update-op
+
+        return switch(operator) {
+            .base_add => UPDATE_OPERATORS.ADD_EQ,
+            .base_sub => UPDATE_OPERATORS.MINUS_EQ,
+            .common_mul => UPDATE_OPERATORS.MUL_EQ,
+            .base_div => UPDATE_OPERATORS.DIV_EQ,
+            .base_mod => UPDATE_OPERATORS.MOD_EQ,
+            .base_exp => UPDATE_OPERATORS.EXP_EQ,
+            .base_bitwise_and => UPDATE_OPERATORS.BITWISE_AND_EQ,
+            .base_bitwise_or => UPDATE_OPERATORS.BITWISE_OR_EQ,
+
+            else => @panic("this should not be possible, only to satisfy the semantics, in which_update_operator\n"),
+        };
 
     }
 
@@ -784,7 +823,6 @@ pub const Parser = struct {
         if((tok == .keyword_and) or (tok == .keyword_or)) return false;
 
         self.advance_token();
-        print("{any}\n", .{self.peek_token().kind});
 
         const tok1 = self.peek_token().kind;
         if(tok1 == .base_assign) {
@@ -894,10 +932,11 @@ test "parse number types" {
 test "parse pointer types" {
     print("--- TEST: PARSE POINTER TYPES\n", .{});
 
-    var parser = Parser.init_for_tests("mut* mut f128");
+    var parser = Parser.init_for_tests("*i32");
     const parsed_ptr = parser.parse_type();
+    _ = parsed_ptr;
 
-    print("{any}\n", .{parsed_ptr.pointer.ptr_to});
+    // print("{any}\n", .{parsed_ptr.pointer.ptr_to});
 
     print("\n\n", .{});
 }
@@ -1096,8 +1135,17 @@ test "parse block expr" {
 
 test "check-operator" {
     print("--- TEST: CHECK OPERATOR\n", .{});
-    var parser = Parser.raw_init_with_file("./file.ox");
-    print("{any}\n", .{parser.is_update_operator()});
+    var parser = Parser.init_for_tests("=");
+    parser.show_full_token_list();
 
     print("\n\n", .{});
 }
+
+// test "check update-expr" {
+//     print("--- TEST: CHECK UPDATE_EXPRESSION\n", .{});
+//     var parser = Parser.raw_init_with_file("./file.ox");
+//     const parsed = parser.parse_block_expr();
+//     _ = parsed;
+//
+//     print("\n\n", .{});
+// }
