@@ -33,8 +33,8 @@ pub const TYPES = union(enum) {
 
     // 
     // all arrays need to be sized,
-    // number_array: []i32 = {1, 2, 3} will not work
-    // number_array: [512]i32 = {1, 2, 3} will work
+    // number_array:: []i32 = {1, 2, 3} will not work
+    // number_array:: [512]i32 = {1, 2, 3} will work
     array: struct {
         len: []const u8,
         lonely_type: *TYPES, // lonely_type of [1024]i32 is i32
@@ -50,8 +50,81 @@ pub const TYPES = union(enum) {
 };
 
 
-pub const EXPRESSION = union(enum) {
-    literals: LITERALS,
+pub const EXPRESSIONS = union(enum) {
+
+    NULL,
+
+    literal_expr: struct {
+        inner_literal: LITERALS,
+        inner_expr: *EXPRESSIONS,
+    },
+
+    operator_expr: struct {
+        inner_operator: OPERATORS,
+        inner_expr: *EXPRESSIONS,
+    },
+
+    fn_call_expr: struct {
+        fn_name: []const u8,
+        inner_expr_list: std.ArrayList(*EXPRESSIONS),
+    },
+
+    block_expr: struct {
+        block_elements: std.ArrayList(BLOCK_ELEMENTS), 
+    },
+
+    return_expr: struct {
+        inner_expr: *EXPRESSIONS,
+    },
+
+};
+
+pub const BLOCK_ELEMENTS = union(enum) {
+    
+    ASSIGNMENT: struct {
+        variable_name: []const u8,
+        variable_type: TYPES,
+        variable_value: ?LITERALS,
+    },
+
+    UPDATE: struct {
+        variable_name: []const u8,
+        UPDATE_OPERATOR: UPDATE_OPERATORS,
+        update_with: LITERALS,
+    },
+
+    EXPRESSION: EXPRESSIONS,
+
+};
+
+pub const UPDATE_OPERATORS = enum {
+    
+    ADD_EQ,
+    MIN_EQ,
+    MUL_EQ,
+    DIV_EQ,
+    MOD_EQ,
+    EXP_EQ,
+    LEFT_SHIFT_EQ,
+    RIGHT_SHIFT_EQ,
+    BITWISE_AND_EQ,
+    BITWISE_OR_EQ,
+
+};
+
+pub const OPERATORS = enum {
+    ADD,
+    MINUS,
+    MULTIPLY, 
+    DIVIDE,
+    MOD,
+    EXP,
+    LEFT_SHIFT,
+    RIGHT_SHIFT,
+    BITWISE_AND,
+    BITWISE_OR,
+    AND,
+    OR,
 };
 
 pub const LITERALS = union(enum) {

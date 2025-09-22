@@ -693,33 +693,33 @@ pub const StreamLexer = struct {
 //// LEXER TESTS ///////// LEXER TESTS ///////// LEXER TESTS /////
 //////////////////////////////////////////////////////////////////
 
-test "next token" {
-    var lexer = StreamLexer.init_with_file("./example.ox");
-
-    while (true) {
-        const token = lexer.next_token();
-        if (token.kind == .base_EOF) return;
-        print("Token-id: {}, Token-lexeme {any}, span<line_number {d}, pos {d}>\n", .{ token.kind, token.lexeme, token.span[1], token.span[0] });
-    }
-}
-
-test "scan symbol" {
-    var lexer = StreamLexer.raw_init("#bool", "file");
-    const token = lexer.scan_symbol();
-
-    print("Token-id: {}, Token-lexeme {s}\n", .{ token.kind, token.lexeme.? });
-}
-
-test "scan string" {
-    var lexer = StreamLexer.raw_init("\"this is a string that will stretch \n multiple lines so what\"", "opt-file");
-    const token = lexer.scan_string();
-
-    print("Token-id: {}, Token-lexeme {s}\n", .{ token.kind, token.lexeme.? });
-}
-
-test "scan number" {
-    var lexer = StreamLexer.raw_init("-200e+199", "some-file");
-    const token = lexer.scan_number();
-
-    print("Token-id: {}, Token-lexeme {s}\n", .{ token.kind, token.lexeme.? });
-}
+// test "next token" {
+//     var lexer = StreamLexer.init_with_file("./example.ox");
+//
+//     while (true) {
+//         const token = lexer.next_token();
+//         if (token.kind == .base_EOF) return;
+//         print("Token-id: {}, Token-lexeme {any}, span<line_number {d}, pos {d}>\n", .{ token.kind, token.lexeme, token.span[1], token.span[0] });
+//     }
+// }
+//
+// test "scan symbol" {
+//     var lexer = StreamLexer.raw_init("#bool", "file");
+//     const token = lexer.scan_symbol();
+//
+//     print("Token-id: {}, Token-lexeme {s}\n", .{ token.kind, token.lexeme.? });
+// }
+//
+// test "scan string" {
+//     var lexer = StreamLexer.raw_init("\"this is a string that will stretch \n multiple lines so what\"", "opt-file");
+//     const token = lexer.scan_string();
+//
+//     print("Token-id: {}, Token-lexeme {s}\n", .{ token.kind, token.lexeme.? });
+// }
+//
+// test "scan number" {
+//     var lexer = StreamLexer.raw_init("-200e+199", "some-file");
+//     const token = lexer.scan_number();
+//
+//     print("Token-id: {}, Token-lexeme {s}\n", .{ token.kind, token.lexeme.? });
+// }

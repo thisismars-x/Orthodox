@@ -15,6 +15,10 @@ const print = std.debug.print;
 const AST = @import("./AST.zig");
 const TYPES = AST.TYPES;
 const LITERALS = AST.LITERALS;
+const EXPRESSIONS = AST.EXPRESSIONS;
+const OPERATORS = AST.OPERATORS;
+const UPDATE_OPERATORS = AST.UPDATE_OPERATORS;
+const BLOCK_ELEMENTS = AST.BLOCK_ELEMENTS;
 
 pub usingnamespace token_id;
 pub usingnamespace TYPES;
@@ -285,6 +289,7 @@ pub const Parser = struct {
             },
         }
 
+        self.advance_token();
         return_type_ptr.* = this_type;
         return return_type_ptr;
 
@@ -360,6 +365,8 @@ pub const Parser = struct {
                         self.advance_token();
                     }
 
+                    self.putback_token();
+
                     return_literal = LITERALS {
                         .member_access = .{
                             .record_type_name = tok.lexeme.?,
@@ -374,9 +381,424 @@ pub const Parser = struct {
             },
         }
 
+        self.advance_token();
         return return_literal;
     }
-    
+
+        
+    pub fn parse_expr(self: *Self) *EXPRESSIONS {
+        const return_expr_ptr = Self.default_allocator.create(EXPRESSIONS) catch @panic("Unable to allocate memory in parse_type\n"); 
+        var this_expr: EXPRESSIONS = undefined;
+
+        // 
+        // parse any expression ending in ; , )
+        while(true) {
+
+            const tok = self.peek_token();
+            switch(tok.kind) {
+
+                .literal_number => {
+                    const inner_literal = self.parse_literals();
+
+                    this_expr = EXPRESSIONS {
+                        .literal_expr = .{
+                            .inner_literal = inner_literal,
+                            .inner_expr = self.parse_expr(),
+                        }
+                    };
+                },
+
+                .literal_float => {
+                    const inner_literal = self.parse_literals();
+
+                    this_expr = EXPRESSIONS {
+                        .literal_expr = .{
+                            .inner_literal = inner_literal,
+                            .inner_expr = self.parse_expr(),
+                        }
+                    };
+                },
+
+                .literal_string => {
+                    const inner_literal = self.parse_literals();
+
+                    this_expr = EXPRESSIONS {
+                        .literal_expr = .{
+                            .inner_literal = inner_literal,
+                            .inner_expr = self.parse_expr(),
+                        }
+                    };
+                },
+
+
+                //
+                // could be either record member access, or fn-expr
+                .base_identifier => {
+                    
+                    self.expect_advance_token(.base_identifier);
+                    const tok1 = self.peek_token();
+
+                    // fn-expr
+                    if(tok1.kind == .base_left_paren) {
+                        const fn_name = tok.lexeme.?;
+                        self.expect_advance_token(.base_left_paren);
+
+                        var arg_list = std.ArrayList(*EXPRESSIONS).init(Self.default_allocator);
+
+                        while(true) {
+                            
+                            // no args
+                            if(self.expect_token(.base_right_paren)) {
+                                break;
+
+                            }
+
+                            const arg_expr = self.parse_expr();
+                            arg_list.append(arg_expr) catch @panic("could not add to arg_list in parse_expr\n");
+
+                            if(self.expect_token(.base_comma)) self.advance_token();
+
+                        }
+
+                        this_expr = EXPRESSIONS {
+                            .fn_call_expr = .{
+                                .fn_name = fn_name,
+                                .inner_expr_list = arg_list,
+                            }
+                        };
+
+                    } else { // record member-access
+                        self.putback_token();
+
+                        const inner_literal = self.parse_literals();
+
+                        this_expr = EXPRESSIONS {
+                            .literal_expr = .{
+                                .inner_literal = inner_literal,
+                                .inner_expr = self.parse_expr(),
+                            }
+                        };
+
+                    } 
+                },
+
+
+
+
+                /////////////////////// OPERATOR-EXPR ///////////////// start ////
+
+                .base_add => {
+                    const inner_operator = OPERATORS.ADD;
+                    self.advance_token();
+
+                    const inner_expr = self.parse_expr();
+
+                    this_expr = EXPRESSIONS {
+                        .operator_expr = .{
+                            .inner_operator = inner_operator,
+                            .inner_expr = inner_expr,
+                        }
+                    };
+                },
+
+                .base_sub => {
+                    const inner_operator = OPERATORS.MINUS;
+                    self.advance_token();
+
+                    const inner_expr = self.parse_expr();
+
+                    this_expr = EXPRESSIONS {
+                        .operator_expr = .{
+                            .inner_operator = inner_operator,
+                            .inner_expr = inner_expr,
+                        }
+                    };
+                },
+
+                .base_div => {
+                    const inner_operator = OPERATORS.DIVIDE;
+                    self.advance_token();
+
+                    const inner_expr = self.parse_expr();
+
+                    this_expr = EXPRESSIONS {
+                        .operator_expr = .{
+                            .inner_operator = inner_operator,
+                            .inner_expr = inner_expr,
+                        }
+                    };
+                },
+
+                .base_mod => {
+                    const inner_operator = OPERATORS.MOD;
+                    self.advance_token();
+
+                    const inner_expr = self.parse_expr();
+
+                    this_expr = EXPRESSIONS {
+                        .operator_expr = .{
+                            .inner_operator = inner_operator,
+                            .inner_expr = inner_expr,
+                        }
+                    };
+                },
+
+                .base_exp => {
+                    const inner_operator = OPERATORS.EXP;
+                    self.advance_token();
+
+                    const inner_expr = self.parse_expr();
+
+                    this_expr = EXPRESSIONS {
+                        .operator_expr = .{
+                            .inner_operator = inner_operator,
+                            .inner_expr = inner_expr,
+                        }
+                    };
+                },
+
+                .base_left_shift => {
+                    const inner_operator = OPERATORS.LEFT_SHIFT;
+                    self.advance_token();
+
+                    const inner_expr = self.parse_expr();
+
+                    this_expr = EXPRESSIONS {
+                        .operator_expr = .{
+                            .inner_operator = inner_operator,
+                            .inner_expr = inner_expr,
+                        }
+                    };
+                },
+
+                .base_right_shift => {
+                    const inner_operator = OPERATORS.RIGHT_SHIFT;
+                    self.advance_token();
+
+                    const inner_expr = self.parse_expr();
+
+                    this_expr = EXPRESSIONS {
+                        .operator_expr = .{
+                            .inner_operator = inner_operator,
+                            .inner_expr = inner_expr,
+                        }
+                    };
+                },
+
+                .base_bitwise_and => {
+                    const inner_operator = OPERATORS.BITWISE_AND;
+                    self.advance_token();
+
+                    const inner_expr = self.parse_expr();
+
+                    this_expr = EXPRESSIONS {
+                        .operator_expr = .{
+                            .inner_operator = inner_operator,
+                            .inner_expr = inner_expr,
+                        }
+                    };
+                },
+
+                .base_bitwise_or => {
+                    const inner_operator = OPERATORS.BITWISE_OR;
+                    self.advance_token();
+
+                    const inner_expr = self.parse_expr();
+
+                    this_expr = EXPRESSIONS {
+                        .operator_expr = .{
+                            .inner_operator = inner_operator,
+                            .inner_expr = inner_expr,
+                        }
+                    };
+                },
+
+                .keyword_and => {
+                    const inner_operator = OPERATORS.AND;
+                    self.advance_token();
+
+                    const inner_expr = self.parse_expr();
+
+                    this_expr = EXPRESSIONS {
+                        .operator_expr = .{
+                            .inner_operator = inner_operator,
+                            .inner_expr = inner_expr,
+                        }
+                    };
+                },
+
+                .keyword_or => {
+                    const inner_operator = OPERATORS.OR;
+                    self.advance_token();
+
+                    const inner_expr = self.parse_expr();
+
+                    this_expr = EXPRESSIONS {
+                        .operator_expr = .{
+                            .inner_operator = inner_operator,
+                            .inner_expr = inner_expr,
+                        }
+                    };
+                },
+
+                /////////////////////// OPERATOR-EXPR /////////////////// end ////
+
+
+
+
+
+
+                .base_semicolon, .base_comma, .base_right_paren => { // null production
+                    return_expr_ptr.* = this_expr;
+                    break;
+                },
+
+                else => {
+                    print("got :: {any}\n", .{tok});
+                    @panic("in parse_expr, panic, unexpected expr");
+                },
+
+
+            }
+
+        }
+
+        return return_expr_ptr;
+
+    }
+
+    pub fn parse_block_expr(self: *Self) EXPRESSIONS {
+
+        self.expect_advance_token(.base_left_braces);
+        var block_elem = std.ArrayList(BLOCK_ELEMENTS).init(Self.default_allocator);
+
+        while(true) {
+
+            const tok = self.peek_token();
+            switch(tok.kind) {
+
+                // ASSIGNMENTS and UPDATES
+                .base_identifier => {
+                    
+                    const var_name = tok.lexeme.?;
+                    self.expect_advance_token(.base_identifier);
+
+                    const tok2 = self.peek_token();
+                    if(tok2.kind == .base_type_colon) { //  ASSIGNMENT
+                        self.expect_advance_token(.base_type_colon);
+                        const var_type = self.parse_type();
+
+                        if(self.expect_token(.base_assign)) { // ASSIGN WITH VALUE ~ a :: i32 = 1024;
+                            self.expect_advance_token(.base_assign);
+                            const value = self.parse_literals();
+
+                            self.expect_advance_token(.base_semicolon);
+
+                            const assignment = BLOCK_ELEMENTS {
+                                .ASSIGNMENT = .{
+                                    .variable_name = var_name,
+                                    .variable_type = var_type.*,
+                                    .variable_value = value,
+                                }
+                            };
+
+                            block_elem.append(assignment) catch @panic("could not add to block_elem in parse_block_expr\n");
+
+                        } else { // ASSIGN WITHOUT VALUE ~ a :: mut i32;
+
+                            self.expect_advance_token(.base_semicolon);
+
+                            const assignment = BLOCK_ELEMENTS {
+                                .ASSIGNMENT = .{
+                                    .variable_name = var_name,
+                                    .variable_type = var_type.*,
+                                    .variable_value = null,
+                                }
+                            };
+
+                            block_elem.append(assignment) catch @panic("could not add to block_elem in parse_block_expr\n");
+
+                        }
+
+
+                    } else { // UPDATE
+
+                    }
+
+
+                },
+
+                .base_right_braces => break,
+
+                else => {
+                    print("got :: {any}\n", .{tok});
+                    @panic("in block_expr, panic for now\n");
+                },
+
+
+            }
+
+        }
+
+        return EXPRESSIONS {
+            .block_expr = .{
+                .block_elements = block_elem,
+            }
+        };
+
+    }
+
+    //
+    // is peek_token a binary-operator
+    pub fn is_operator(self: *Self) bool {
+        
+        switch(self.peek_token().kind) {
+            
+            .base_add, .base_sub,
+            .base_div, .common_mul,
+            .base_exp, .base_mod,
+            .base_equal, .base_not_equal,
+            .base_lt, .base_gt,
+            .base_le, .base_ge,
+            .base_left_shift, .base_right_shift,
+            .base_bitwise_and, .base_bitwise_or,
+            .keyword_and, .keyword_or =>
+            return true,
+
+            else =>
+            return false,
+
+        }
+
+    }
+
+    //
+    // is peek_token an update-operator
+    pub fn is_update_operator(self: *Self) bool {
+
+        const is_op = self.is_operator();
+        if(is_op == false) return false;
+
+        // a and= 6, is not valid, nor is a or= 7
+        const tok = self.peek_token().kind;
+        if((tok == .keyword_and) or (tok == .keyword_or)) return false;
+
+        self.advance_token();
+        print("{any}\n", .{self.peek_token().kind});
+
+        const tok1 = self.peek_token().kind;
+        if(tok1 == .base_assign) {
+            self.putback_token();
+            return true;
+
+        } else {
+            self.putback_token();
+            return false;
+
+        }
+
+    }
+
 
     //
     // look at next token without consuming it
@@ -384,7 +806,10 @@ pub const Parser = struct {
         if(self.current_token_idx) |idx| {
             if(idx + 1 > Self.LEN_STREAM_TOKENS) @panic("out-of-index access in peek_token\n");
             return self.stream_tokens.items[idx + 1];
-        } else return self.stream_tokens.items[0];
+        } else {
+            // self.current_token_idx = 1;
+            return self.stream_tokens.items[0];
+        } 
     }
 
     //
@@ -418,8 +843,9 @@ pub const Parser = struct {
     // undo the effect of an individual advance_token
     pub fn putback_token(self: *Self) void {
         if(self.current_token_idx) |idx| {
-            if(idx > 0) self.current_token_idx.? -= 1;
-        }
+            if(idx > 0) { self.current_token_idx.? -= 1; }
+            else self.current_token_idx = null;
+        } 
     }
 
     //
@@ -577,6 +1003,101 @@ test "parse literal member_access" {
     for(parsed_record.member_access.members_name_in_order.items) |member_name| {
         print(".{s}", .{member_name});
     }
+
+    print("\n\n", .{});
+}
+
+test "parse simple literal expr" {
+    print("--- TEST: PARSE SIMPLE LITERAL EXPR\n", .{});
+
+    var parser = Parser.init_for_tests("1+2;");
+    const parsed = parser.parse_expr().literal_expr;
+
+    print("{any}\n::{any}\n::{any}\n", .{parsed.inner_literal, parsed.inner_expr.operator_expr, parsed.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal});
+
+    print("\n\n", .{});
+}
+
+test "parse simple literal expr2" {
+    var parser = Parser.init_for_tests("STRUCTNAME.STRUCTFIELD.STRUCTFIELD2+b - ENUMNAME.SOMEFIELD;");
+    const parsed = parser.parse_expr().literal_expr;
+
+    print("{any}\n", .{parsed.inner_literal.member_access});
+    print("{any}\n", .{parsed.inner_expr.operator_expr});
+    print("{any}\n", .{parsed.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal});
+    print("\n\n", .{});
+}
+
+test "parse simple literal expr3" {
+    print("--- TEST: PARSE LITERAL EXPR\n", .{});
+
+    var parser = Parser.init_for_tests("1 >> NUM_OF_BITS + 4 / 7;");
+    const parsed = parser.parse_expr();
+
+    print("{s}\n", .{parsed.literal_expr.inner_literal.number.inner_value});
+    print("{any}\n", .{parsed.literal_expr.inner_expr.operator_expr.inner_operator});
+    print("{s}\n", .{parsed.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal.variable.inner_value});
+    print("{any}\n", .{parsed.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_operator});
+    print("{s}\n", .{parsed.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal.number.inner_value});
+    print("{any}\n", .{parsed.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_operator});
+    print("{s}\n", .{parsed.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal.number.inner_value});
+
+    print("\n\n", .{});
+}
+
+
+test "parse simple function expr3" {
+    print("--- TEST: PARSE FUNCTION EXPR\n", .{});
+
+    var parser = Parser.init_for_tests("print(COUNTER + 1, WARN_LVL_ENUM.MAX)");
+    const parsed = parser.parse_expr().fn_call_expr;
+
+    print("fn_name :: {s}\n", .{parsed.fn_name});
+    print("ARG1 EXPRESSION :: \n", .{});
+
+    print("{s} ", .{parsed.inner_expr_list.items[0].literal_expr.inner_literal.variable.inner_value});
+    print("{any} ", .{parsed.inner_expr_list.items[0].literal_expr.inner_expr.operator_expr.inner_operator});
+    print("{s}\n", .{parsed.inner_expr_list.items[0].literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal.number.inner_value});
+
+    print("ARG2 EXPRESSION :: \n", .{});
+
+    const parsed_record = parsed.inner_expr_list.items[1].literal_expr.inner_literal;
+
+    print("{s}.", .{parsed_record.member_access.record_type_name});
+
+    for(parsed_record.member_access.members_name_in_order.items) |member_name| {
+        print("{s}", .{member_name});
+    }
+
+
+    print("\n\n", .{});
+}
+
+
+test "parse simple function expr4" {
+    var parser = Parser.init_for_tests("print(100 + 200 + 300, a.b.c << c.b.a and a + \"another string\", get_y() + 200);");
+    const parsed = parser.parse_expr().fn_call_expr;
+    _ = parsed;
+
+    print("\n\n", .{});
+}
+
+test "parse block expr" {
+    print("--- TEST: PARSE BLOCK EXPR\n", .{});
+    var parser = Parser.init_for_tests("{ x :: i32; }");
+    const blk_elems = parser.parse_block_expr().block_expr.block_elements.items;
+    
+    for(blk_elems) |item| {
+        print("{any}\n", .{item});
+    }
+
+    print("\n\n", .{});
+}
+
+test "check-operator" {
+    print("--- TEST: CHECK OPERATOR\n", .{});
+    var parser = Parser.raw_init_with_file("./file.ox");
+    print("{any}\n", .{parser.is_update_operator()});
 
     print("\n\n", .{});
 }
