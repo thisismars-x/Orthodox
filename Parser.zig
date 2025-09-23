@@ -678,6 +678,22 @@ pub const Parser = struct {
                 ////////////////// BREAK|RETURN - EXPR ////////////////// end ////
 
 
+                
+                /////////////////// GROUPED - EXPR //////////////////// start ////
+
+                .base_left_paren => {
+                    self.advance_token();
+
+                    this_expr = EXPRESSIONS {
+                        .grouped_expr = .{
+                            .inner_expr = self.parse_expr(),
+                        }
+                    };
+
+                    self.expect_advance_token(.base_right_paren);
+                },
+        
+                /////////////////// GROUPED - EXPR //////////////////// end //////
 
 
 
@@ -1343,23 +1359,35 @@ test "check update-expr4" {
     print("passed..\n\n", .{});
 }
 
-// test "check update-expr5" {
-//     print("--- TEST: CHECK UPDATE_EXPRESSION\n", .{});
-//     var parser = Parser.init_for_tests("{ b.c.d.e.f += 100; d -= 4; 100 + 200 - 1 >> n_bits + 2 ** FORTY.TWO; { a -= 2; }}");
-//     const parsed = parser.parse_expr();
-//     _ = parsed;
-//
-//     print("passed..\n\n", .{});
-// }
-//
-// test "check for-loop-expr3" {
-//     print("--- TEST: CHECK FOR_LOOP_EXPR\n", .{});
-//     var parser = Parser.init_for_tests("for i in 0 + 100 : 200 : { {a -= 2; { a -= 2; } } break b.c.d.e.f + 2;}; for j in 10 : 2000 : print(x);");
-//     const parsed = parser.parse_expr();
-//     _ = parsed;
-//
-//     const parsed2 = parser.parse_expr();
-//     _ = parsed2;
-//
-//     print("passed..\n\n", .{});
-// }
+test "check update-expr5" {
+    print("--- TEST: CHECK UPDATE_EXPRESSION\n", .{});
+    var parser = Parser.init_for_tests("{ b.c.d.e.f += 100; d -= 4; 100 + 200 - 1 >> n_bits + 2 ** FORTY.TWO; { a -= 2; }}");
+    const parsed = parser.parse_expr();
+    _ = parsed;
+
+    print("passed..\n\n", .{});
+}
+
+test "check grouped_expr" {
+    print("--- TEST: CHECK UPDATE_EXPRESSION\n", .{});
+    var parser = Parser.init_for_tests("{ x :: mut i32 = (1 + 2 - 3); }");
+    const parsed = parser.parse_expr();
+    _ = parsed;
+
+    print("passed..\n\n", .{});
+}
+
+test "check for-loop-expr3" {
+    print("--- TEST: CHECK FOR_LOOP_EXPR\n", .{});
+    var parser = Parser.init_for_tests("for i in 0 + 100 : 200 : { {a -= 2; { a -= 2; } } break b.c.d.e.f + 2;}; for j in 10 : 2000 : print(x);");
+    const parsed = parser.parse_expr();
+    _ = parsed;
+
+    const parsed2 = parser.parse_expr();
+    _ = parsed2;
+
+    const parsed3 = parser.parse_expr();
+    _ = parsed3;
+
+    print("passed..\n\n", .{});
+}

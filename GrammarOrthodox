@@ -6,14 +6,15 @@
 
 block       -> "{" [ ASSIGNMENT | VAR_UPDATE | expr ]* "}"
 
-expr        -> literals op-expr | op-expr | fn_call expr | block expr    | break_expr  | return_expr | if_expr       | for_expr    | NULL
+expr        -> literals op-expr | op-expr | fn_call expr | block expr    | break_expr  | return_expr | if_expr       | for_expr    | grouped_expr | NULL
 
-op-expr     -> OPERATOR expr
-fn_call     -> IDENTIFIER "(" [ expr ","? ]* ")"
-if_expr     -> "if" expr "{" block "}" [ "elif" expr "{" block "}"]* [ "else" expr "{" block "}"]
-for_expr    -> "for" IDENTIFIER "in" expr ":" expr ":" "{" block "}"
-break_expr  -> "break" expr
-return_expr -> "return" expr
+op-expr      -> OPERATOR expr
+fn_call      -> IDENTIFIER "(" [ expr ","? ]* ")"
+if_expr      -> "if" expr ":" "{" block "}" [ "elif" expr ":" "{" block "}"]* [ "else" ":" "{" block "}"]
+for_expr     -> "for" IDENTIFIER "in" expr ":" expr ":" "{" block "}"
+break_expr   -> "break" expr
+return_expr  -> "return" expr
+grouped_expr -> "(" expr ")"
 
 literals    -> number | string | IDENTIFIER | member_access
 
