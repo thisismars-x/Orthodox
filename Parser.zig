@@ -683,45 +683,46 @@ pub const Parser = struct {
 
                 //////////////////// LOOP-EXPR /////////////////// start //
 
-                // for IDENTIFIER in EXPR-THAT-EVALS-TO-INT : EXPR-THAT-EVALS-TO-INT BLOCK
-                // .keyword_for => {
-                //     self.advance_token();
-                //     if(self.expect_token(.base_identifier) == false) @panic("in for-loop, expected IDENTIFIER after for, in parse_expr\n");
-                //
-                //     const IDENTIFIER = self.peek_token().lexeme.?;
-                //
-                //     self.expect_advance_token(.keyword_in);
-                //
-                //     const expr1 = self.parse_expr();
-                //     self.expect_advance_token(.base_colon);
-                //
-                //     const expr2 = self.parse_expr();
-                //
-                //     const blk = self.parse_block_expr();
-                //
-                //     this_expr = EXPRESSIONS {
-                //         .for_expr = .{
-                //             .identifier_name = IDENTIFIER,
-                //             .expr1 = expr1,
-                //             .expr2 = expr2,
-                //             .blk = blk,
-                //         }
-                //     };
-                //
-                // },
-                
+                // for IDENTIFIER in EXPR-THAT-EVALS-TO-INT : EXPR-THAT-EVALS-TO-INT : BLOCK
+                .keyword_for => {
+                    self.advance_token();
+                    if(self.expect_token(.base_identifier) == false) @panic("in for-loop, expected IDENTIFIER after for, in parse_expr\n");
 
+                    const IDENTIFIER = self.peek_token().lexeme.?;
+                    self.expect_advance_token(.base_identifier);
+
+                    self.expect_advance_token(.keyword_in);
+
+                    const expr1 = self.parse_expr();
+                    self.expect_advance_token(.base_colon);
+
+
+                    const expr2 = self.parse_expr();
+                    self.expect_advance_token(.base_colon);
+
+                    this_expr = EXPRESSIONS {
+                        .for_expr = .{
+                            .identifier_name = IDENTIFIER,
+                            .expr1 = expr1,
+                            .expr2 = expr2,
+                            .blk = self.parse_expr(), 
+                        }
+                    };
+
+
+                },
 
                 //////////////////// LOOP-EXPR /////////////////// end ////
 
                 .base_left_braces => {
                     this_expr = self.parse_block_expr();
-                    self.expect_advance_token(.base_right_braces);
                     return_expr_ptr.* = this_expr;
                     break;
                 },
 
-                .base_semicolon, .base_comma, .base_right_paren => { // null production
+                // in for-loop expression
+                // for i in EXPR1 : EXPR2 { BLOCK }
+                .base_semicolon, .base_colon, .base_comma, .base_right_paren => { // null production
                     return_expr_ptr.* = this_expr;
                     break;
                 },
@@ -872,9 +873,12 @@ pub const Parser = struct {
 
                 },
 
-                .base_right_braces => break,
+                .base_right_braces => {
+                        self.expect_advance_token(.base_right_braces);
+                        break;
+                },
 
-                else => { // EXPRESSION
+                else => { // EXPRESSIONS not beginning with .base_identifier or struct types
 
                         const expr = BLOCK_ELEMENTS {
                             .EXPRESSION = self.parse_expr().*,
@@ -882,7 +886,6 @@ pub const Parser = struct {
 
                         if(self.expect_token(.base_semicolon)) {
                             self.advance_token();
-                            break;
                         }
 
                         block_elem.append(expr) catch @panic("could not add to block_elem, in parse_block_expr\n");
@@ -1323,7 +1326,7 @@ test "check update-expr3" {
 
 test "check update-expr4" {
     print("--- TEST: CHECK UPDATE_EXPRESSION\n", .{});
-    var parser = Parser.init_for_tests("{b.c.d.e.f += 2; d -= 4; 100 + 200 - 1 >> n_bits + 2 ** FORTY.TWO; }");
+    var parser = Parser.init_for_tests("{b.c.d.e.f += 2; d -= 4; 100 + 200; { a -= 2; { a += 2; } } }");
     const parsed = parser.parse_block_expr();
     const first_expr = parsed.block_expr.block_elements.items[0].UPDATE;
 
@@ -1332,8 +1335,31 @@ test "check update-expr4" {
     print("\n", .{});
     print("operator:: {any}\n", .{first_expr.UPDATE_OPERATOR});
     print("expr :: {s}\n", .{first_expr.update_with.literal_expr.inner_literal.number.inner_value});
-    
 
+    const third_expr = parsed.block_expr.block_elements.items[2].EXPRESSION.literal_expr;
+    print("{s} {any} {s}\n", .{third_expr.inner_literal.number.inner_value, third_expr.inner_expr.operator_expr.inner_operator, third_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal.number.inner_value});
+
+    print("no. of expr in block-expr :: {any}\n", .{parsed.block_expr.block_elements.items.len});
     print("passed..\n\n", .{});
 }
 
+// test "check update-expr5" {
+//     print("--- TEST: CHECK UPDATE_EXPRESSION\n", .{});
+//     var parser = Parser.init_for_tests("{ b.c.d.e.f += 100; d -= 4; 100 + 200 - 1 >> n_bits + 2 ** FORTY.TWO; { a -= 2; }}");
+//     const parsed = parser.parse_expr();
+//     _ = parsed;
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test "check for-loop-expr3" {
+//     print("--- TEST: CHECK FOR_LOOP_EXPR\n", .{});
+//     var parser = Parser.init_for_tests("for i in 0 + 100 : 200 : { {a -= 2; { a -= 2; } } break b.c.d.e.f + 2;}; for j in 10 : 2000 : print(x);");
+//     const parsed = parser.parse_expr();
+//     _ = parsed;
+//
+//     const parsed2 = parser.parse_expr();
+//     _ = parsed2;
+//
+//     print("passed..\n\n", .{});
+// }
