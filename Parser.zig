@@ -880,7 +880,10 @@ pub const Parser = struct {
                             .EXPRESSION = self.parse_expr().*,
                         };
 
-                        // self.expect_advance_token(.base_semicolon);
+                        if(self.expect_token(.base_semicolon)) {
+                            self.advance_token();
+                            break;
+                        }
 
                         block_elem.append(expr) catch @panic("could not add to block_elem, in parse_block_expr\n");
                 },
@@ -1320,7 +1323,7 @@ test "check update-expr3" {
 
 test "check update-expr4" {
     print("--- TEST: CHECK UPDATE_EXPRESSION\n", .{});
-    var parser = Parser.init_for_tests("{b.c.d.e.f += 2; d -= 4;}");
+    var parser = Parser.init_for_tests("{b.c.d.e.f += 2; d -= 4; 100 + 200 - 1 >> n_bits + 2 ** FORTY.TWO; }");
     const parsed = parser.parse_block_expr();
     const first_expr = parsed.block_expr.block_elements.items[0].UPDATE;
 
