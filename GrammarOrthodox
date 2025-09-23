@@ -23,7 +23,7 @@ member_access ->  IDENTIFIER [ "." IDENTIFIER ]+
 
 
 ASSIGNMENT  ->  IDENTIFIER "::" type [ "=" expr ]?
-VAR_UPDATE  ->  IDENTIFIER UPDATE_OPERATOR expr
+VAR_UPDATE  ->  [IDENTIFIER | MEMBER_ACCESS]? UPDATE_OPERATOR expr
 
 
 -- all valid types ----------------->

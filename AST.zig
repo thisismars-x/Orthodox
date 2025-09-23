@@ -77,6 +77,17 @@ pub const EXPRESSIONS = union(enum) {
         inner_expr: *EXPRESSIONS,
     },
 
+    break_expr: struct {
+        inner_expr: *EXPRESSIONS,
+    },
+
+    for_expr: struct {
+        identifier_name: []const u8,
+        expr1: *EXPRESSIONS,
+        expr2: *EXPRESSIONS,
+        blk: *EXPRESSIONS, // block_expr 
+    },
+
 };
 
 pub const BLOCK_ELEMENTS = union(enum) {
@@ -84,13 +95,13 @@ pub const BLOCK_ELEMENTS = union(enum) {
     ASSIGNMENT: struct {
         variable_name: []const u8,
         variable_type: TYPES,
-        variable_value: ?LITERALS,
+        variable_value: ?EXPRESSIONS,
     },
 
     UPDATE: struct {
-        variable_name: []const u8,
+        updated_variable: LITERALS,
         UPDATE_OPERATOR: UPDATE_OPERATORS,
-        update_with: LITERALS,
+        update_with: EXPRESSIONS,
     },
 
     EXPRESSION: EXPRESSIONS,

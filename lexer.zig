@@ -180,6 +180,9 @@ pub const StreamLexer = struct {
         } else if (std.mem.eql(u8, lexeme, "for")) {
             token.kind = .keyword_for;
             token.lexeme = null;
+        } else if (std.mem.eql(u8, lexeme, "in")) {
+            token.kind = .keyword_in;
+            token.lexeme = null;
         } else if (std.mem.eql(u8, lexeme, "if")) {
             token.kind = .keyword_if;
             token.lexeme = null;

@@ -24,6 +24,7 @@ pub const token_id = enum {
     keyword_else,
     keyword_enum,
     keyword_for,
+    keyword_in,
     keyword_if,
     keyword_elif,
     keyword_return,

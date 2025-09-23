@@ -387,6 +387,8 @@ pub const Parser = struct {
     }
 
         
+    //
+    // parse all types of expr 
     pub fn parse_expr(self: *Self) *EXPRESSIONS {
         const return_expr_ptr = Self.default_allocator.create(EXPRESSIONS) catch @panic("Unable to allocate memory in parse_type\n"); 
         var this_expr: EXPRESSIONS = undefined;
@@ -647,7 +649,77 @@ pub const Parser = struct {
 
 
 
+                ////////////////// BREAK|RETURN - EXPR ////////////////// start //
 
+                .keyword_return => {
+                    self.advance_token();
+
+                    const inner_expr = self.parse_expr();
+
+                    this_expr = EXPRESSIONS {
+                        .return_expr = .{
+                            .inner_expr = inner_expr, 
+                        }
+                    };
+                },
+
+                .keyword_break => {
+                    self.advance_token();
+
+                    const inner_expr = self.parse_expr();
+
+                    this_expr = EXPRESSIONS {
+                        .return_expr = .{
+                            .inner_expr = inner_expr, 
+                        }
+                    };
+                },
+
+                ////////////////// BREAK|RETURN - EXPR ////////////////// end ////
+
+
+
+
+
+                //////////////////// LOOP-EXPR /////////////////// start //
+
+                // for IDENTIFIER in EXPR-THAT-EVALS-TO-INT : EXPR-THAT-EVALS-TO-INT BLOCK
+                // .keyword_for => {
+                //     self.advance_token();
+                //     if(self.expect_token(.base_identifier) == false) @panic("in for-loop, expected IDENTIFIER after for, in parse_expr\n");
+                //
+                //     const IDENTIFIER = self.peek_token().lexeme.?;
+                //
+                //     self.expect_advance_token(.keyword_in);
+                //
+                //     const expr1 = self.parse_expr();
+                //     self.expect_advance_token(.base_colon);
+                //
+                //     const expr2 = self.parse_expr();
+                //
+                //     const blk = self.parse_block_expr();
+                //
+                //     this_expr = EXPRESSIONS {
+                //         .for_expr = .{
+                //             .identifier_name = IDENTIFIER,
+                //             .expr1 = expr1,
+                //             .expr2 = expr2,
+                //             .blk = blk,
+                //         }
+                //     };
+                //
+                // },
+                
+
+
+                //////////////////// LOOP-EXPR /////////////////// end ////
+
+                .base_left_braces => {
+                    this_expr = self.parse_block_expr();
+                    self.expect_advance_token(.base_right_braces);
+                    return_expr_ptr.* = this_expr;
+                    break;
+                },
 
                 .base_semicolon, .base_comma, .base_right_paren => { // null production
                     return_expr_ptr.* = this_expr;
@@ -668,7 +740,10 @@ pub const Parser = struct {
 
     }
 
+    // 
+    // parse blocks ~ blocks reside within {} and may return values using break-keyword
     pub fn parse_block_expr(self: *Self) EXPRESSIONS {
+        // const return_block_expr_ptr = Self.default_allocator.create(EXPRESSIONS) catch @panic("Unable to allocate memory in parse_type\n"); 
 
         self.expect_advance_token(.base_left_braces);
         var block_elem = std.ArrayList(BLOCK_ELEMENTS).init(Self.default_allocator);
@@ -678,7 +753,7 @@ pub const Parser = struct {
             const tok = self.peek_token();
             switch(tok.kind) {
 
-                // ASSIGNMENTS and UPDATES
+                // ASSIGNMENTS and UPDATES and expressions beginning with id/member-access
                 .base_identifier => {
                     
                     const var_name = tok.lexeme.?;
@@ -691,7 +766,7 @@ pub const Parser = struct {
 
                         if(self.expect_token(.base_assign)) { // ASSIGN WITH VALUE ~ a :: i32 = 1024;
                             self.expect_advance_token(.base_assign);
-                            const value = self.parse_literals();
+                            const value = self.parse_expr();
 
                             self.expect_advance_token(.base_semicolon);
 
@@ -699,7 +774,7 @@ pub const Parser = struct {
                                 .ASSIGNMENT = .{
                                     .variable_name = var_name,
                                     .variable_type = var_type.*,
-                                    .variable_value = value,
+                                    .variable_value = value.*,
                                 }
                             };
 
@@ -722,35 +797,78 @@ pub const Parser = struct {
                         }
 
 
-                    } else if(self.is_update_operator()) { // UPDATE
+                    } else { // UPDATE ~ to variable or struct-members
 
-                        const update_op = self.which_update_operator();
-                        const update_with = self.parse_literals();
+                        var update_literal: LITERALS = undefined; // update_literal from member_access or identifier_name
+
+                        if(self.expect_token(.base_dot)) {  // member-access of a struct
                         
-                        const update = BLOCK_ELEMENTS {
-                            .UPDATE = .{
-                                .variable_name = var_name,
-                                .UPDATE_OPERATOR = update_op,
-                                .update_with = update_with,
+                            self.advance_token();
+
+                            var member_names = std.ArrayList([]const u8).init(Self.default_allocator);
+
+                            while(true) {
+                                const field_name = self.peek_token();
+                                member_names.append(field_name.lexeme.?) catch @panic("could not extend member_names std.ArrayList in parse_literals\n");
+                                self.advance_token();
+
+                                if(self.expect_token(.base_dot) == false) break;
+                                self.advance_token();
                             }
-                        };
 
-                        self.expect_advance_token(.base_semicolon);
+                            self.putback_token();
 
-                        block_elem.append(update) catch @panic("could not add to block_elem in parse_block_expr\n");
+                            update_literal = LITERALS {
+                                .member_access = .{
+                                    .record_type_name = tok.lexeme.?,
+                                    .members_name_in_order = member_names,
+                                }
+                            };
+                            
 
-                    } else { // EXPRESSION
-                        
-                        const expr = BLOCK_ELEMENTS {
-                            .EXPRESSION = self.parse_expr().*,
-                        };
+                        } else { // normal identifier_name
+                            self.putback_token(); // go back to before .base_identifier to get its name
 
-                        self.expect_advance_token(.base_semicolon);
+                            update_literal = LITERALS {
+                                .variable = .{
+                                    .inner_value = self.peek_token().lexeme.?,
+                                }
+                            };
 
-                        block_elem.append(expr) catch @panic("could not add to block_elem, in parse_block_expr\n");
+                        }
+
+                        self.expect_advance_token(.base_identifier);
+
+                        if(self.is_update_operator()) {
+                            const update_op = self.which_update_operator();
+                            const update_with = self.parse_expr();
+                            
+                            const update = BLOCK_ELEMENTS {
+                                .UPDATE = .{
+                                    .updated_variable = update_literal,
+                                    .UPDATE_OPERATOR = update_op,
+                                    .update_with = update_with.*,
+                                }
+                            };
+
+                            self.expect_advance_token(.base_semicolon);
+
+                            block_elem.append(update) catch @panic("could not add to block_elem in parse_block_expr\n");
+
+                        } else { // EXPRESSION involving .base_identifier or .keyword_struct as lvalue
+                            self.putback_token(); // putback .base_identifier 
+
+                            const expr = BLOCK_ELEMENTS {
+                                .EXPRESSION = self.parse_expr().*,
+                            };
+
+                            self.expect_advance_token(.base_semicolon);
+
+                            block_elem.append(expr) catch @panic("could not add to block_elem, in parse_block_expr\n");
+
+                        }
 
                     }
-
 
                 },
 
@@ -762,7 +880,7 @@ pub const Parser = struct {
                             .EXPRESSION = self.parse_expr().*,
                         };
 
-                        self.expect_advance_token(.base_semicolon);
+                        // self.expect_advance_token(.base_semicolon);
 
                         block_elem.append(expr) catch @panic("could not add to block_elem, in parse_block_expr\n");
                 },
@@ -1166,7 +1284,7 @@ test "check-operator" {
 test "check assign-expr" {
     print("--- TEST: CHECK ASSIGN_EXPRESSION\n", .{});
     var parser = Parser.init_for_tests("{ x :: i32 =1; y :: mut u8; }");
-    const parsed = parser.parse_block_expr();
+    const parsed = parser.parse_expr();
     _ = parsed;
 
     print("passed..\n\n", .{});
@@ -1175,18 +1293,44 @@ test "check assign-expr" {
 
 test "check update-expr" {
     print("--- TEST: CHECK UPDATE_EXPRESSION\n", .{});
-    var parser = Parser.init_for_tests("{ x >>= 32; y /= \"some string\"; z :: mut f64; }");
+    var parser = Parser.init_for_tests("{ x >>= 32; y /= \"some string\"; z :: mut f64; { c + d; } }");
+    const parsed = parser.parse_expr();
+    _ = parsed;
+
+    print("passed..\n\n", .{});
+}
+
+test "check update-expr2" {
+    print("--- TEST: CHECK UPDATE_EXPRESSION\n", .{});
+    var parser = Parser.init_for_tests("{a -= 1 >> some_number.pi; b :: i32 = 2 + 6 ** 7;}");
     const parsed = parser.parse_block_expr();
     _ = parsed;
 
     print("passed..\n\n", .{});
 }
 
-test "check block-expr" {
-    print("--- TEST: CHECK BLOCK_EXPRESSION\n", .{});
-    var parser = Parser.init_for_tests("{ x >>= 32; y /= \"some string\"; z :: mut f64; a + b; 100 + 200;}");
+test "check update-expr3" {
+    print("--- TEST: CHECK UPDATE_EXPRESSION\n", .{});
+    var parser = Parser.init_for_tests("{b.c.d.e.f + 2;}");
     const parsed = parser.parse_block_expr();
-    _ = parsed;
+    print("{any}\n", .{parsed.block_expr.block_elements.items[0].EXPRESSION.literal_expr.inner_expr});
 
     print("passed..\n\n", .{});
 }
+
+test "check update-expr4" {
+    print("--- TEST: CHECK UPDATE_EXPRESSION\n", .{});
+    var parser = Parser.init_for_tests("{b.c.d.e.f += 2; d -= 4;}");
+    const parsed = parser.parse_block_expr();
+    const first_expr = parsed.block_expr.block_elements.items[0].UPDATE;
+
+    print("lvalue :: {s}", .{first_expr.updated_variable.member_access.record_type_name});
+    for(first_expr.updated_variable.member_access.members_name_in_order.items) |item| print(".{s}", .{item});
+    print("\n", .{});
+    print("operator:: {any}\n", .{first_expr.UPDATE_OPERATOR});
+    print("expr :: {s}\n", .{first_expr.update_with.literal_expr.inner_literal.number.inner_value});
+    
+
+    print("passed..\n\n", .{});
+}
+
