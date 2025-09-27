@@ -8,6 +8,9 @@ const std = @import("std");
 // 
 // All types in ORthodox
 pub const TYPES = union(enum) {
+
+    void, 
+
     number: struct {
         focused_type: []const u8, // u8? i64? f32?
         mut: bool,
@@ -49,8 +52,8 @@ pub const TYPES = union(enum) {
     },
 
     function: struct { 
-        args_and_types: std.StringHashMap(*TYPES),
-        return_type: ?*TYPES, // void-types are optional
+        args_and_types: ?std.StringHashMap(*TYPES),
+        return_type: *TYPES, // void-types are optional
     },
 };
 
@@ -58,7 +61,7 @@ pub const DEFINITIONS = union(enum) {
 
     struct_def: struct {
         struct_name: []const u8,
-        fields_types: std.StringHashMap(TYPES),
+        fields_types: std.StringHashMap(*TYPES),
     },
 
     enum_def: struct {
@@ -68,7 +71,7 @@ pub const DEFINITIONS = union(enum) {
 
     function_def: struct {
         fn_name: []const u8,
-        fn_type: TYPES,
+        fn_type: *TYPES,
         fn_block: STATEMENTS,
     },
 

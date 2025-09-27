@@ -57,6 +57,8 @@ pub const token_id = enum {
     type_f64,
     type_f128,
 
+    type_void,
+
     type_char,
     type_string,
     type_reference, 

@@ -239,6 +239,9 @@ pub const StreamLexer = struct {
         } else if (std.mem.eql(u8, lexeme, "none")) {
             token.kind = .type_none;
             token.lexeme = null;
+        }  else if (std.mem.eql(u8, lexeme, "void")) {
+            token.kind = .type_void;
+            token.lexeme = null;
         } else if (std.mem.eql(u8, lexeme, "namespace")) {
             token.kind = .type_namespace;
             token.lexeme = null;

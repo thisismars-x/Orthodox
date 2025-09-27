@@ -9,7 +9,7 @@ stdio :: namespace = #include<stdio.h>
   }
 };
 
-is_even :: fn(number @i32) #bool = {
+is_even :: fn(number ::  @i32) #bool = {
   return number % 2 == 0;
 };
 
@@ -34,7 +34,7 @@ terminal_mutate :: fn() = {
   // mutate
 };
 
-main :: fn(args i32, argv []string) = {
+main :: fn(args :: i32, argv :: []string) = {
   
   i :: mut usize;
   while(i <= args) {

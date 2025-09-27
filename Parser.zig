@@ -218,6 +218,9 @@ pub const Parser = struct {
                 };
             },
 
+            .type_void => {
+                this_type = TYPES.void; 
+            },
 
 
             ///////////////// PTR, REF, ARRAYS  ////////////////// start /
@@ -228,10 +231,12 @@ pub const Parser = struct {
 
                 this_type = TYPES {
                     .pointer = .{
-                        .ptr_to = self.parse_type(),
+                        .ptr_to = self.parse_type(), // after calling parse_type call putback_token ~ parse_type advance_token' before returning
                         .mut = type_is_mut,
                     }   
                 };
+
+                self.putback_token();
             },
 
             .type_reference => {
@@ -243,6 +248,8 @@ pub const Parser = struct {
                         .mut = type_is_mut,
                     }
                 };
+
+                self.putback_token();
             },
 
             .base_left_bracket => { // array types
@@ -273,6 +280,8 @@ pub const Parser = struct {
                         .mut = type_is_mut,
                     }
                 };
+
+                self.putback_token();
             },
 
             ///////////////// PTR, REF, ARRAYS  //////////////////// end /
@@ -302,46 +311,60 @@ pub const Parser = struct {
 
             .keyword_function => {
 
-                self.expect_advance_token(.keyword_function);
+                self.expect_advance_token(.keyword_function); 
                 self.expect_advance_token(.base_left_paren);
 
                 var args_and_types = std.StringHashMap(*TYPES).init(Self.default_allocator);
 
+                var no_args = true;
+
                 while(true) {
-                    
-                    const tok2 = self.peek_token();
-                    if(tok2.kind == .base_right_paren) { 
-                        self.advance_token();
+                    if(self.expect_token(.base_right_paren)) {
+                        self.expect_advance_token(.base_right_paren);
                         break;
                     }
 
+                    const arg_name = self.peek_token().lexeme.?;
                     self.expect_advance_token(.base_identifier);
-                    const fn_param_name = tok2.lexeme.?;
 
-                    const type_param = self.parse_type();
-                    
-                    args_and_types.put(fn_param_name, type_param) catch @panic("could not add to args_and_types in parse_types\n");
-                    if(self.expect_token(.base_comma) == false) break;
+                    self.expect_advance_token(.base_type_colon);
+
+                    const arg_type = self.parse_type();
+
+                    no_args = false;
+                    args_and_types.put(arg_name, arg_type) catch @panic("could not put to args_and_types in parse_types\n");
+
+                    if(!self.expect_token(.base_comma)) {
+                        self.expect_advance_token(.base_right_paren);
+                        break;
+                    } 
 
                     self.expect_advance_token(.base_comma);
+
                 }
 
-                if(self.expect_token(.base_assign)) {
+                const fn_return_type = self.parse_type();
+                self.putback_token();
+
+                if(no_args) {
                     this_type = TYPES {
                         .function = .{
-                            .args_and_types = args_and_types,
-                            .return_type = null,
+                            .args_and_types = null,
+                            .return_type = fn_return_type,
                         }
                     };
-
                 } else {
                     this_type = TYPES {
                         .function = .{
                             .args_and_types = args_and_types,
-                            .return_type = self.parse_type(),
+                            .return_type = fn_return_type,
                         }
                     };
+
                 }
+
+                
+
             },
 
             ///////////// FUNCTION TYPES ////////////////////////// end ////
@@ -457,7 +480,7 @@ pub const Parser = struct {
 
     /////////////////// RECORDS - AND - FUNCTION DEFINITIONS /////// start ///
 
-    pub fn parse_struct_def(self: *Self) void {
+    pub fn parse_struct_def(self: *Self) DEFINITIONS {
 
         const struct_name = self.peek_token().lexeme.?;
         self.expect_advance_token(.base_identifier);
@@ -468,7 +491,7 @@ pub const Parser = struct {
         self.expect_advance_token(.base_assign);
         self.expect_advance_token(.base_left_braces);
 
-        var fields_types = std.StringHashMap(TYPES).init(Self.default_allocator);
+        var fields_types = std.StringHashMap(*TYPES).init(Self.default_allocator);
 
         var is_struct_empty = true;
         while(true) {
@@ -491,6 +514,12 @@ pub const Parser = struct {
         }
 
         if(is_struct_empty) @panic("struct with no fields is not allowed\n");
+
+        if(!self.expect_token(.base_semicolon)) {
+            @panic("struct-def should end with .base_semicolon");
+        }
+
+        self.expect_advance_token(.base_semicolon);
 
         return DEFINITIONS {
             .struct_def = .{
@@ -533,6 +562,12 @@ pub const Parser = struct {
 
         if(enum_is_empty) @panic("enum with no fields is not allowed\n");
 
+        if(!self.expect_token(.base_semicolon)) {
+            @panic("enum-def must end with .base_semicolon");
+        }
+
+        self.expect_advance_token(.base_semicolon);
+
         return DEFINITIONS {
             .enum_def = .{
                 .enum_name = enum_name,
@@ -556,8 +591,14 @@ pub const Parser = struct {
 
         const fn_block = self.parse_block();
 
+        if(!self.expect_token(.base_semicolon)) {
+            @panic("function-def must end with .base_semicolon");
+        }
+
+        self.expect_advance_token(.base_semicolon);
+
         return DEFINITIONS {
-            .function = .{
+            .function_def = .{
                 .fn_name = fn_name,
                 .fn_type = fn_type,
                 .fn_block = fn_block,
@@ -1639,6 +1680,68 @@ test {
     var parser = Parser.init_for_tests(s);
     const parsed = parser.parse_if_stmt();
     _ = parsed;
+
+    print("{any}\n", .{parser.peek_token().kind});
+
+    print("passed..\n\n", .{});
+}
+
+test {
+    print("-- TEST PARSE TOP_LVL STRUCT_DEF\n", .{});
+
+    const s = 
+    \\ logger :: struct = {
+    \\      level :: String,
+    \\      panic :: u8,
+    \\      which :: mut [1024][1024]i32,
+    \\ };
+    ;
+
+    var parser = Parser.init_for_tests(s);
+    const parsed = parser.parse_struct_def();
+    _ = parsed;
+
+    print("{any}\n", .{parser.peek_token().kind});
+
+    print("passed..\n\n", .{});
+}
+
+test {
+    print("-- TEST PARSE TOP_LVL ENUM_DEF\n", .{});
+
+    const s = 
+    \\ level :: enum = {
+    \\      NONE, 
+    \\      ERR,
+    \\      FATAL,
+    \\      PANIC, 
+    \\ };
+    ;
+
+    var parser = Parser.init_for_tests(s);
+    const parsed = parser.parse_enum_def();
+    _ = parsed;
+
+    print("{any}\n", .{parser.peek_token().kind});
+
+    print("passed..\n\n", .{});
+}
+
+test {
+    print("-- TEST PARSE FUNCTION-TYPE\n", .{});
+
+    const s = "fn(x :: String, y :: @String) mut [1024]u8";
+
+    var parser = Parser.init_for_tests(s);
+    const parsed = parser.parse_type().function;
+
+    var args_types = parsed.args_and_types.?.iterator();
+
+    while(args_types.next()) |item| {
+        print("{s} :: {any}\n", .{item.key_ptr.*, item.value_ptr.*});
+    }
+
+    print("returns :: {any}\n", .{parsed.return_type});
 
     print("{any}\n", .{parser.peek_token().kind});
 
