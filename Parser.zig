@@ -1245,7 +1245,7 @@ pub const Parser = struct {
                 // loop-stmt
                 .keyword_loop =>
                 { 
-                    const loop_stmt = self.parse_for_stmt();
+                    const loop_stmt = self.parse_loop_stmt();
                     block_elem.append(loop_stmt.*) catch @panic("can not append to block_elem\n");
                 },
 
@@ -1742,6 +1742,22 @@ test {
     }
 
     print("returns :: {any}\n", .{parsed.return_type});
+
+    print("{any}\n", .{parser.peek_token().kind});
+
+    print("passed..\n\n", .{});
+}
+
+test {
+    print("-- TEST PARSE TOP_LVL FUNCTION_DEF\n", .{});
+
+    const s = 
+    \\ main :: fn(args :: u32, argv :: [1024]String) void = { loop : { a :: i32; } };
+    ;
+
+    var parser = Parser.init_for_tests(s);
+    const parsed = parser.parse_fn_def();
+    _ = parsed;
 
     print("{any}\n", .{parser.peek_token().kind});
 
