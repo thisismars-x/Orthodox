@@ -105,6 +105,16 @@ pub const STATEMENTS = union(enum) {
         loop_block: *STATEMENTS,
     },
 
+    conditional_stmt: struct {
+        if_cond: *EXPRESSIONS,
+        if_block: *STATEMENTS,
+
+        elif_conds: ?std.ArrayList(*EXPRESSIONS),
+        elif_blocks: ?std.ArrayList(*STATEMENTS),
+
+        else_block: ?*STATEMENTS,
+    },
+
     assignment: struct {
         lvalue_name: []const u8,
         lvalue_type: *TYPES,

@@ -861,7 +861,78 @@ pub const Parser = struct {
 
     ////////////////////// CONDITIONALS ///////////////////////// start ////
 
-    pub fn parse_if_stmt(self: *Self) void {
+    pub fn parse_if_stmt(self: *Self) *STATEMENTS {
+
+        const return_if_ptr = Self.default_allocator.create(STATEMENTS) catch @panic("Unable to allocate memory in parse_if_stmt\n");
+        
+        var has_elif_branches = false;
+        var elif_conds = std.ArrayList(*EXPRESSIONS).init(Self.default_allocator);
+        var elif_blocks = std.ArrayList(*STATEMENTS).init(Self.default_allocator);
+
+        self.expect_advance_token(.keyword_if);
+
+        const if_cond = self.parse_expr();
+
+        const if_block = Self.default_allocator.create(STATEMENTS) catch @panic("Unable to allocate memory in parse_if_stmt\n");
+        if_block.* = self.parse_block();
+
+        // elif branches?
+        while(true) { // assume there are branches, and correct that assumption
+            if(!self.expect_token(.keyword_elif)) break;
+            has_elif_branches = true;
+
+            self.expect_advance_token(.keyword_elif);
+
+            const elif_cond = self.parse_expr();
+            const elif_block = Self.default_allocator.create(STATEMENTS) catch @panic("Unable to allocate memory in parse_if_stmt\n");
+            elif_block.* = self.parse_block();
+
+            elif_conds.append(elif_cond) catch @panic("could not append to elif_conds in parse_if_stmt\n");
+            elif_blocks.append(elif_block) catch @panic("could not append to elif_conds in parse_if_stmt\n");
+
+        }
+
+        var has_else = false;
+        const else_blk: *STATEMENTS = Self.default_allocator.create(STATEMENTS) catch @panic("Unable to allocate memory in parse_if_stmt\n");
+
+        // else branch?
+        if(self.expect_token(.keyword_else)) {
+            has_else = true;
+
+            self.expect_advance_token(.keyword_else);
+            self.expect_advance_token(.base_colon);
+
+            else_blk.* = self.parse_block();
+        }
+
+
+        if(has_elif_branches) {
+            return_if_ptr.* = STATEMENTS {
+                .conditional_stmt = .{
+                    .if_cond = if_cond,
+                    .if_block = if_block,
+
+                    .elif_conds = elif_conds,
+                    .elif_blocks = elif_blocks,
+
+                    .else_block = if(has_else) else_blk else null,
+                }
+            };
+        } else {
+            return_if_ptr.* = STATEMENTS {
+                .conditional_stmt = .{
+                    .if_cond = if_cond,
+                    .if_block = if_block,
+
+                    .elif_conds = null,
+                    .elif_blocks = null,
+
+                    .else_block = else_blk,
+                }
+            };
+        }
+
+        return return_if_ptr;
 
     }
 
@@ -946,16 +1017,20 @@ pub const Parser = struct {
                     block_elem.append(loop_stmt.*) catch @panic("can not append to block_elem\n");
                 },
 
-
-
-
-
+                // if-stmt
+                .keyword_if => 
+                {
+                    const if_stmt = self.parse_if_stmt();
+                    block_elem.append(if_stmt.*) catch @panic("can not append to block_elem\n");
+                },
 
 
                 else =>
                 @panic("todo"),
             }
         }
+
+        self.expect_advance_token(.base_right_braces);
 
         return STATEMENTS {
            .block = .{
@@ -1352,6 +1427,29 @@ test {
     print("{any}\n", .{parsed_blk[0]});
     print("{any}\n", .{parsed_blk[1]});
     print("{any}\n", .{parsed_blk[2].for_stmt});
+
+    print("passed..\n\n", .{});
+}
+
+test {
+    print("-- TEST PARSE IF_EXPR\n", .{});
+
+    const s = 
+    \\ if i >> 32 - 2000 : {
+    \\      c :: mut i32 = 0;
+    \\ } elif IS_THIS_VAR_TRUE : {
+    \\      d = 100;
+    \\ } elif THIS_VAR_IS_TRUE : {
+    \\     e = "string";
+    \\ } else : { x :: i32 = 1; x += 1; }
+    \\
+    ;
+
+    var parser = Parser.init_for_tests(s);
+    const parsed = parser.parse_if_stmt();
+    _ = parsed;
+
+    print("{any}\n", .{parser.peek_token().kind});
 
     print("passed..\n\n", .{});
 }
