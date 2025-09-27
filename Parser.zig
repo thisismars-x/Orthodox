@@ -19,6 +19,7 @@ const EXPRESSIONS = AST.EXPRESSIONS;
 const OPERATORS = AST.OPERATORS;
 const UPDATE_OPERATORS = AST.UPDATE_OPERATORS;
 const STATEMENTS = AST.STATEMENTS;
+const DEFINITIONS = AST.DEFINITIONS;
 
 pub usingnamespace token_id;
 pub usingnamespace TYPES;
@@ -309,7 +310,10 @@ pub const Parser = struct {
                 while(true) {
                     
                     const tok2 = self.peek_token();
-                    if(tok2.kind == .base_right_paren) break;
+                    if(tok2.kind == .base_right_paren) { 
+                        self.advance_token();
+                        break;
+                    }
 
                     self.expect_advance_token(.base_identifier);
                     const fn_param_name = tok2.lexeme.?;
@@ -322,12 +326,22 @@ pub const Parser = struct {
                     self.expect_advance_token(.base_comma);
                 }
 
-                this_type = TYPES {
-                    .function = .{
-                        .args_and_types = args_and_types,
-                    }
-                };
+                if(self.expect_token(.base_assign)) {
+                    this_type = TYPES {
+                        .function = .{
+                            .args_and_types = args_and_types,
+                            .return_type = null,
+                        }
+                    };
 
+                } else {
+                    this_type = TYPES {
+                        .function = .{
+                            .args_and_types = args_and_types,
+                            .return_type = self.parse_type(),
+                        }
+                    };
+                }
             },
 
             ///////////// FUNCTION TYPES ////////////////////////// end ////
@@ -441,6 +455,123 @@ pub const Parser = struct {
     }
 
 
+    /////////////////// RECORDS - AND - FUNCTION DEFINITIONS /////// start ///
+
+    pub fn parse_struct_def(self: *Self) void {
+
+        const struct_name = self.peek_token().lexeme.?;
+        self.expect_advance_token(.base_identifier);
+
+        self.expect_advance_token(.base_type_colon);
+        self.expect_advance_token(.keyword_struct);
+
+        self.expect_advance_token(.base_assign);
+        self.expect_advance_token(.base_left_braces);
+
+        var fields_types = std.StringHashMap(TYPES).init(Self.default_allocator);
+
+        var is_struct_empty = true;
+        while(true) {
+            if(self.expect_token(.base_right_braces)) {
+                self.expect_advance_token(.base_right_braces);
+                break;
+            }
+
+            const field_name = self.peek_token().lexeme.?;
+            self.expect_advance_token(.base_identifier);
+
+            self.expect_advance_token(.base_type_colon);
+            const field_type = self.parse_type();
+
+            self.expect_advance_token(.base_comma);
+
+            is_struct_empty = false;
+            fields_types.put(field_name, field_type) catch @panic("can not append to fields_types in parse_struct_def\n");
+
+        }
+
+        if(is_struct_empty) @panic("struct with no fields is not allowed\n");
+
+        return DEFINITIONS {
+            .struct_def = .{
+                .struct_name = struct_name,
+                .fields_types = fields_types,
+            }
+        };
+
+
+    }
+
+    pub fn parse_enum_def(self: *Self) DEFINITIONS {
+
+        const enum_name = self.peek_token().lexeme.?;
+        self.expect_advance_token(.base_identifier);
+
+        self.expect_advance_token(.base_type_colon);
+        self.expect_advance_token(.keyword_enum);
+
+        self.expect_advance_token(.base_assign);
+        self.expect_advance_token(.base_left_braces);
+    
+        var fields = std.ArrayList([]const u8).init(Self.default_allocator);
+
+        var enum_is_empty = true;
+        while(true) {
+            if(self.expect_token(.base_right_braces)) {
+                self.expect_advance_token(.base_right_braces);
+                break;
+            }
+
+            const field_name = self.peek_token().lexeme.?;
+            self.expect_advance_token(.base_identifier);
+
+            enum_is_empty = false;
+            fields.append(field_name) catch @panic("could not append to field_names in parse_enum_def\n");
+
+            self.expect_advance_token(.base_comma);
+        }
+
+        if(enum_is_empty) @panic("enum with no fields is not allowed\n");
+
+        return DEFINITIONS {
+            .enum_def = .{
+                .enum_name = enum_name,
+                .fields = fields,
+            }
+        };
+        
+
+    }
+
+    pub fn parse_fn_def(self: *Self) DEFINITIONS {
+
+        const fn_name = self.peek_token().lexeme.?;
+        self.expect_advance_token(.base_identifier);
+
+        self.expect_advance_token(.base_type_colon);
+
+        const fn_type = self.parse_type();
+
+        self.expect_advance_token(.base_assign);
+
+        const fn_block = self.parse_block();
+
+        return DEFINITIONS {
+            .function = .{
+                .fn_name = fn_name,
+                .fn_type = fn_type,
+                .fn_block = fn_block,
+            }
+        };
+
+    }
+
+    /////////////////// RECORDS - AND - FUNCTION DEFINITIONS /////// end /////
+
+
+
+
+
     //////////////////////// SUB-EXPRESSIONS /////////////////////// start /// 
 
     pub fn parse_literal_expr(self: *Self) *EXPRESSIONS {
@@ -477,12 +608,72 @@ pub const Parser = struct {
                 operator = OPERATORS.MINUS;
             },
 
+            .base_div => {
+                operator = OPERATORS.DIVIDE;
+            },
+
+            .common_mul => {
+                operator = OPERATORS.MULTIPLY;
+            },
+
+            .base_mod => {
+                operator = OPERATORS.MOD;
+            },
+
+            .base_exp  => {
+                operator = OPERATORS.EXP;
+            },
+
             .base_left_shift => {
                 operator = OPERATORS.LEFT_SHIFT;
             },
 
-            else => @panic("TODO:: add other operators"),
-            
+            .base_right_shift => {
+                operator = OPERATORS.RIGHT_SHIFT;
+            },
+
+            .base_bitwise_and => {
+                operator = OPERATORS.BITWISE_AND;
+            },
+
+            .base_bitwise_or => {
+                operator = OPERATORS.BITWISE_OR;
+            },
+
+            .keyword_and => {
+                operator = OPERATORS.AND;
+            },
+
+            .keyword_or => {
+                operator = OPERATORS.OR;
+            },
+
+            .base_lt => {
+                operator = OPERATORS.LT;
+            },
+
+            .base_gt => {
+                operator = OPERATORS.GT;
+            },
+
+            .base_le => {
+                operator = OPERATORS.LE;
+            },
+
+            .base_ge => {
+                operator = OPERATORS.GE;
+            },
+
+            .base_equal => {
+                operator = OPERATORS.EQUAL;
+            },
+
+            .base_not_equal => {
+                operator = OPERATORS.NON_EQUAL;
+            },
+
+            else => 
+            @panic("invalid operator in parse_fn_call_expr\n"),
         }
 
         self.advance_token();
@@ -1049,7 +1240,7 @@ pub const Parser = struct {
         
         switch(self.peek_token().kind) {
             
-            .base_assign,
+            .base_assign, // used in update_op along with '+/-/...'
             .base_add, .base_sub,
             .base_div, .common_mul,
             .base_exp, .base_mod,
@@ -1235,7 +1426,7 @@ test {
 
 test {
     print("-- TEST PARSE FUNCTION EXPRESSIONS\n", .{});
-    var parser = Parser.init_for_tests("add('c', number, number + 2);");
+    var parser = Parser.init_for_tests("add('c', 2 + number, number + 2);");
 
     const parsed = parser.parse_expr();
     _ = parsed;

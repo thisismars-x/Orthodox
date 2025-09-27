@@ -50,7 +50,29 @@ pub const TYPES = union(enum) {
 
     function: struct { 
         args_and_types: std.StringHashMap(*TYPES),
-    }
+        return_type: ?*TYPES, // void-types are optional
+    },
+};
+
+pub const DEFINITIONS = union(enum) {
+
+    struct_def: struct {
+        struct_name: []const u8,
+        fields_types: std.StringHashMap(TYPES),
+    },
+
+    enum_def: struct {
+        enum_name: []const u8,
+        fields: std.ArrayList([]const u8),
+    },
+
+    function_def: struct {
+        fn_name: []const u8,
+        fn_type: TYPES,
+        fn_block: STATEMENTS,
+    },
+
+
 };
 
 
@@ -163,6 +185,14 @@ pub const OPERATORS = enum {
     BITWISE_OR,
     AND,
     OR,
+
+    LT,
+    GT,
+    LE,
+    GE,
+
+    EQUAL,
+    NON_EQUAL,
 
 };
 

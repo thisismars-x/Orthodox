@@ -25,6 +25,17 @@ member_access ->  IDENTIFIER [ "." IDENTIFIER ]+
 ------------------------------------end
 
 
+
+-- top-lvl records && function definitions ----->
+
+struct-def   ->  IDENTIFIER "::" "struct" "=" "{" [ IDENTIFIER "::" TYPE ]* "}"
+enum-def     ->  IDENTIFIER "::" "enum" "=" "{" [ IDENTIFIER ]* "}"
+function-def ->  IDENTIFIER "::" FUNCTION-TYPE "=" block
+
+----------------------------------------------end
+
+
+
 ASSIGNMENT  ->  IDENTIFIER "::" type [ "=" expr ]?
 VAR_UPDATE  ->  [IDENTIFIER | MEMBER_ACCESS]? UPDATE_OPERATOR expr
 
