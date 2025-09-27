@@ -17,7 +17,7 @@ const LexErrorContext = errors.LexErrorContext;
 const std = @import("std");
 const print = std.debug.print;
 
-// 
+//
 // Tokenize stream of characters, one by one, instead of tokenizing
 // the whole file at once
 pub const StreamLexer = struct {
@@ -40,8 +40,8 @@ pub const StreamLexer = struct {
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .{};
     const default_allocator = gpa.allocator();
 
-    // 
-    // raw_init should never be called in production, only acceptable 
+    //
+    // raw_init should never be called in production, only acceptable
     // in tests, where it is bothersome to create files and write to them
     pub fn raw_init(source: []const u8, filename: []const u8) Self {
         return Self{
@@ -51,7 +51,6 @@ pub const StreamLexer = struct {
             .line = 1,
             .error_context = LexErrorContext.zero_init_err_context(),
         };
-
     }
 
     //
@@ -66,27 +65,22 @@ pub const StreamLexer = struct {
         remove_comments(source[0..source.len]);
 
         return Self.raw_init(source, filename);
-
     }
 
-
-
-
-
-    //////////////////// 1. SCAN-SYMBOLS //////////////// start //
+    //////////////////// SCAN-SYMBOLS //////////////// start //
 
     //
     // this function delegates responsibility to functions based on current_token
-    // and next_token 
+    // and next_token
     pub fn next_token(self: *Self) Token {
         self.skip_whitespace();
 
         const c = self.peek() orelse
-        return Token{
-            .kind = .base_EOF,
-            .lexeme = null,
-            .span = .{self.pos, self.line},
-        };
+            return Token{
+                .kind = .base_EOF,
+                .lexeme = null,
+                .span = .{ self.pos, self.line },
+            };
 
         if (c == '@' or c == '#' or c == '?' or is_alpha(c)) {
             return self.scan_symbol();
@@ -99,7 +93,6 @@ pub const StreamLexer = struct {
         } else {
             return self.scan_base();
         }
-
     }
 
     //
@@ -121,7 +114,7 @@ pub const StreamLexer = struct {
                 return Token{
                     .kind = .type_maybe,
                     .lexeme = null,
-                    .span = .{self.pos, self.line},
+                    .span = .{ self.pos, self.line },
                 };
             },
 
@@ -130,7 +123,7 @@ pub const StreamLexer = struct {
                 return Token{
                     .kind = .type_reference,
                     .lexeme = null,
-                    .span = .{self.pos, self.line},
+                    .span = .{ self.pos, self.line },
                 };
             },
 
@@ -277,7 +270,7 @@ pub const StreamLexer = struct {
             } else self.error_dump(LexError.InvalidDirective);
         }
 
-        token.span = .{self.pos, self.line};
+        token.span = .{ self.pos, self.line };
         return token;
     }
 
@@ -300,7 +293,6 @@ pub const StreamLexer = struct {
             '|' => id = .base_bitwise_or,
             ',' => id = .base_comma,
             ':' => {
-
                 _ = self.advance();
 
                 if (self.peek()) |c| {
@@ -339,8 +331,7 @@ pub const StreamLexer = struct {
                 if (self.peek()) |c| {
                     if (c == '=') {
                         id = .base_not_equal;
-                    }
-                    else {
+                    } else {
                         id = .common_exclamation;
                         already_skipped = true;
                     }
@@ -353,10 +344,10 @@ pub const StreamLexer = struct {
             '=' => {
                 _ = self.advance();
 
-                if(self.peek()) |c| {
-                    if(c == '=') {
+                if (self.peek()) |c| {
+                    if (c == '=') {
                         id = .base_equal;
-                    }  else {
+                    } else {
                         id = .base_assign;
                         already_skipped = true;
                     }
@@ -364,13 +355,12 @@ pub const StreamLexer = struct {
                     id = .base_assign;
                     already_skipped = true;
                 }
-
             },
 
             '>' => {
                 _ = self.advance();
 
-                if(self.peek()) |c| {
+                if (self.peek()) |c| {
                     if (c == '=') {
                         id = .base_ge;
                     } else if (c == '>') {
@@ -383,8 +373,6 @@ pub const StreamLexer = struct {
                     id = .base_gt;
                     already_skipped = true;
                 }
-
-
             },
 
             '<' => {
@@ -396,14 +384,13 @@ pub const StreamLexer = struct {
                     } else if (c == '<') {
                         id = .base_right_shift;
                     } else {
-                    id = .base_lt;
-                    already_skipped = true;
+                        id = .base_lt;
+                        already_skipped = true;
                     }
                 } else {
                     id = .base_lt;
                     already_skipped = true;
                 }
-
             },
 
             '.' => id = .base_dot,
@@ -411,16 +398,15 @@ pub const StreamLexer = struct {
             else => self.error_dump(LexError.InvalidToken),
         }
 
-        if(!already_skipped) _ = self.advance();
+        if (!already_skipped) _ = self.advance();
 
         const tok = Token{
             .kind = id,
             .lexeme = null,
-            .span = .{self.pos, self.line},
+            .span = .{ self.pos, self.line },
         };
-        
-        return tok;
 
+        return tok;
     }
 
     //
@@ -431,11 +417,41 @@ pub const StreamLexer = struct {
         const start = self.pos;
         var is_float = false;
 
-        while (self.peek()) |c| {
-            if (is_digit(c)) {
+        // hex and binary numbers may not be float
+        var is_bin = false;
+        var is_hex = false;
+
+        // check binary/hex prefix, sanitize string later
+        if(self.peek()) |x| {
+            if(x == '0') {
                 _ = self.advance();
+
+                if(self.peek()) |y| {
+                    _ = self.advance(); 
+                        if(self.peek()) |z| {
+                            if(is_digit(z) or (z >= 'a' and z <= 'z') or (z >= 'A' and z <= 'Z')) { // 0_* may be followed by number, or hex
+                                if(y == 'x' or y == 'X') { is_hex = true; }
+                                else if(y == 'b' or y == 'B') { is_bin = true; }
+                                else @panic("incomplete bin/hex number prefix\n");
+                            }
+                        }
+                    
+                }
+            }
+        }
+
+        while (self.peek()) |c| {
+            if(is_bin) {
+                if(c == '0' or c == '1') { _ = self.advance(); }
+                else break;
+
+            } else if(is_hex) {
+                if(is_digit(c) or (c >= 'a' and c <= 'h') or (c >= 'A' and c <= 'H')) { _ = self.advance(); }
+                else break;
+
             } else {
-                break;
+                if (is_digit(c)) { _ = self.advance(); }
+                else break;
             }
         }
 
@@ -444,6 +460,8 @@ pub const StreamLexer = struct {
                 is_float = true;
             }
         }
+
+        if((is_float) and (is_hex or is_bin)) @panic("no floating point allowed with bin/hex prefix\n");
 
         if (is_float) {
             _ = self.advance();
@@ -485,13 +503,13 @@ pub const StreamLexer = struct {
         if (is_float) return Token{
             .kind = .literal_float,
             .lexeme = lexeme,
-            .span = .{self.pos, self.line},
+            .span = .{ self.pos, self.line },
         };
 
         return Token{
             .kind = .literal_number,
             .lexeme = lexeme,
-            .span = .{self.pos, self.line},
+            .span = .{ self.pos, self.line },
         };
     }
 
@@ -532,32 +550,29 @@ pub const StreamLexer = struct {
         return Token{
             .kind = .literal_string,
             .lexeme = self.source[start..self.pos],
-            .span = .{self.pos, self.line},
+            .span = .{ self.pos, self.line },
         };
-
     }
-
 
     //
     // single character within ''
     pub fn scan_char(self: *Self) Token {
         const start = self.pos;
 
-        _ = self.advance(); 
+        _ = self.advance();
 
         _ = self.peek().?;
         _ = self.advance();
 
         const c1 = self.peek().?;
         if (c1 != '\'') self.error_dump(LexError.MalformedChar);
-        _ = self.advance(); 
+        _ = self.advance();
 
-        return Token {
+        return Token{
             .kind = .literal_char,
             .lexeme = self.source[start..self.pos],
-            .span = .{self.pos, self.line},
+            .span = .{ self.pos, self.line },
         };
-
     }
 
     /////////////////////// SCAN-SYMBOLS //////////////// end //
@@ -565,10 +580,7 @@ pub const StreamLexer = struct {
 
 
 
-
-
-
-    //////////////// 2. ERROR-DUMPING /////////////////// start ////
+    //////////////// ERROR-DUMPING /////////////////// start //////
 
     pub fn fmt_display_err_context(self: *Self) void {
         if (self.error_context.err) |err| {
@@ -583,7 +595,6 @@ pub const StreamLexer = struct {
                 }
             }
         }
-
     }
 
     pub fn write_err_context_dump_err(self: *Self) void {
@@ -593,39 +604,30 @@ pub const StreamLexer = struct {
             "{s}:{d} :: {s}",
             .{ self.filename orelse "", self.line, self.get_nth_line(self.line) },
         ) catch @panic("Could not write to err_context buffer\n");
-
     }
 
     pub fn error_dump(self: *Self, err: LexError) void {
         self.error_context.err = err;
         self.write_err_context_dump_err();
         self.fmt_display_err_context();
-
     }
 
     ////////////////// ERROR-DUMPING //////////////////// end //////
 
 
 
-
-
-
-
-    /////////////// 3. ACCESSORY_FUNCTIONS /////////////// start ///
+    /////////////// ACCESSORY_FUNCTIONS /////////////// start /////
 
     pub fn is_alpha(c: u8) bool {
         return (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or (c == '_');
-
     }
 
     pub fn is_digit(c: u8) bool {
         return (c >= '0' and c <= '9');
-
     }
 
     pub fn is_alpha_numeric(c: u8) bool {
         return (is_alpha(c) or is_digit(c));
-
     }
 
     pub fn get_nth_line(self: *Self, n: usize) []const u8 {
@@ -649,10 +651,8 @@ pub const StreamLexer = struct {
         }
 
         return self.source[start_pos + 1 .. end_pos];
-
     }
 
-    
     //
     // '//' type comments
     pub fn remove_comments(source: []u8) void {
@@ -666,7 +666,6 @@ pub const StreamLexer = struct {
                 i = j;
             }
         }
-
     }
 
     //
@@ -674,16 +673,14 @@ pub const StreamLexer = struct {
     pub fn peek(self: *Self) ?u8 {
         if (self.pos >= self.source.len) return null;
         return self.source[self.pos];
-
     }
 
     //
-    // consume current token 
+    // consume current token
     pub fn advance(self: *Self) ?u8 {
         const c = peek(self) orelse return null;
         self.pos += 1;
         return c;
-
     }
 
     //
@@ -701,12 +698,12 @@ pub const StreamLexer = struct {
                 else => break,
             }
         }
-
     }
 
     ////////////////// ACCESSORY_FUNCTIONS /////////////// end /////
 
 };
+
 
 //////////////////////////////////////////////////////////////////
 //// LEXER TESTS ///////// LEXER TESTS ///////// LEXER TESTS /////
@@ -737,7 +734,7 @@ pub const StreamLexer = struct {
 // }
 //
 // test "scan number" {
-//     var lexer = StreamLexer.raw_init("-200e+199", "some-file");
+//     var lexer = StreamLexer.raw_init("0b00001000", "some-file");
 //     const token = lexer.scan_number();
 //
 //     print("Token-id: {}, Token-lexeme {s}\n", .{ token.kind, token.lexeme.? });

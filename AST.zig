@@ -47,6 +47,10 @@ pub const TYPES = union(enum) {
         record_name: []const u8,
         mut: bool,
     },
+
+    function: struct { 
+        args_and_types: std.StringHashMap(*TYPES),
+    }
 };
 
 
@@ -69,10 +73,6 @@ pub const EXPRESSIONS = union(enum) {
         inner_expr_list: std.ArrayList(*EXPRESSIONS),
     },
 
-    block_expr: struct {
-        block_elements: std.ArrayList(BLOCK_ELEMENTS), 
-    },
-
     return_expr: struct {
         inner_expr: *EXPRESSIONS,
     },
@@ -81,14 +81,7 @@ pub const EXPRESSIONS = union(enum) {
         inner_expr: *EXPRESSIONS,
     },
 
-    for_expr: struct {
-        identifier_name: []const u8,
-        expr1: *EXPRESSIONS,
-        expr2: *EXPRESSIONS,
-        blk: *EXPRESSIONS, // block_expr 
-    },
-
-    grouped_expr: struct {
+    closed_expr: struct {
         inner_expr: *EXPRESSIONS,
     },
 
@@ -149,6 +142,10 @@ pub const LITERALS = union(enum) {
     },
 
     string: struct {
+        inner_value: []const u8,
+    },
+
+    char: struct {
         inner_value: []const u8,
     },
 

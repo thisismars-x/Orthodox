@@ -4,14 +4,16 @@
 
 -- block, expressions, literals ------>
 
-block       -> "{" [ ASSIGNMENT | VAR_UPDATE | expr ]* "}"
+block       -> "{" [ ASSIGNMENT | VAR_UPDATE | expr | stmt ]* "}"
 
-expr        -> literals op-expr | op-expr | fn_call expr | block expr    | break_expr  | return_expr | if_expr       | for_expr    | grouped_expr | NULL
+expr        -> literals op-expr | op-expr | fn_call expr | break_expr  | return_expr  | grouped_expr | NULL
+
+stmt         -> if_stmt | for_stmt
 
 op-expr      -> OPERATOR expr
 fn_call      -> IDENTIFIER "(" [ expr ","? ]* ")"
-if_expr      -> "if" expr ":" "{" block "}" [ "elif" expr ":" "{" block "}"]* [ "else" ":" "{" block "}"]
-for_expr     -> "for" IDENTIFIER "in" expr ":" expr ":" "{" block "}"
+if_stmt      -> "if" expr ":" "{" block "}" [ "elif" expr ":" "{" block "}"]* [ "else" ":" "{" block "}"]
+for_stmt     -> "for" IDENTIFIER "in" expr ":" expr ":" "{" block "}"
 break_expr   -> "break" expr
 return_expr  -> "return" expr
 grouped_expr -> "(" expr ")"
