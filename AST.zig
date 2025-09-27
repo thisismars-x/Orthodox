@@ -85,9 +85,36 @@ pub const EXPRESSIONS = union(enum) {
         inner_expr: *EXPRESSIONS,
     },
 
+    struct_expr: struct {
+        struct_name: []const u8,
+        fields_values: std.StringHashMap(*EXPRESSIONS),
+    },
+
 };
 
-pub const BLOCK_ELEMENTS = union(enum) {
+pub const STATEMENTS = union(enum) {
+
+    for_stmt: struct {
+        identifier_name: []const u8,
+        range_expr1: EXPRESSIONS,
+        range_expr2: EXPRESSIONS,
+    },
+
+    assignment: struct {
+        lvalue_name: []const u8,
+        lvalue_type: *TYPES,
+        rvalue_expr: ?*EXPRESSIONS,
+    },
+
+    update: struct {
+        lvalue_name: []const u8,
+        update_op: UPDATE_OPERATORS,
+        rvalue_expr: *EXPRESSIONS,
+    },
+
+};
+
+pub const BLOCK = union(enum) {
     
     ASSIGNMENT: struct {
         variable_name: []const u8,
@@ -103,10 +130,13 @@ pub const BLOCK_ELEMENTS = union(enum) {
 
     EXPRESSION: EXPRESSIONS,
 
+    STATEMENT: STATEMENTS,
+
 };
 
 pub const UPDATE_OPERATORS = enum {
     
+    ASSIGN,
     ADD_EQ,
     MINUS_EQ,
     MUL_EQ,
@@ -121,6 +151,7 @@ pub const UPDATE_OPERATORS = enum {
 };
 
 pub const OPERATORS = enum {
+
     ADD,
     MINUS,
     MULTIPLY, 
@@ -133,6 +164,7 @@ pub const OPERATORS = enum {
     BITWISE_OR,
     AND,
     OR,
+
 };
 
 pub const LITERALS = union(enum) {

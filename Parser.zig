@@ -19,6 +19,7 @@ const EXPRESSIONS = AST.EXPRESSIONS;
 const OPERATORS = AST.OPERATORS;
 const UPDATE_OPERATORS = AST.UPDATE_OPERATORS;
 const BLOCK_ELEMENTS = AST.BLOCK_ELEMENTS;
+const STATEMENTS = AST.STATEMENTS;
 
 pub usingnamespace token_id;
 pub usingnamespace TYPES;
@@ -514,7 +515,11 @@ pub const Parser = struct {
             // in parse_expr, .base_right_paren / .base_comma / .base_semicolon are consumed,
             // hence putback, to check if token was ')' marking end of function call
             self.putback_token();
-            if(self.expect_token(.base_right_paren)) break;
+            if(self.expect_token(.base_right_paren)) {
+                self.advance_token();
+                break;
+            } 
+
             self.advance_token();
 
             const inner_expr = self.parse_expr();
@@ -580,6 +585,42 @@ pub const Parser = struct {
 
     }
 
+    // 
+    // right side may only contain struct creation, and nothing else
+    // struct_init require ',' after every field
+    pub fn parse_struct_init_expr(self: *Self) *EXPRESSIONS {
+        const struct_expr_ptr = Self.default_allocator.create(EXPRESSIONS) catch @panic("Unable to allocate memory in parse_struct_init_expr\n");
+        var fields_values = std.StringHashMap(*EXPRESSIONS).init(Self.default_allocator);
+
+        const struct_name = self.peek_token().lexeme.?;
+        self.expect_advance_token(.base_identifier);
+        self.expect_advance_token(.base_left_braces);
+
+        while(true) {
+            if(self.peek_token().kind == .base_right_braces) break;
+
+            self.expect_advance_token(.base_dot);
+            const field_name = self.peek_token().lexeme.?;
+            print("{s}\n", .{field_name});
+            self.expect_advance_token(.base_identifier);
+
+            self.expect_advance_token(.base_assign);
+
+            const field_value = self.parse_expr();
+
+            fields_values.put(field_name, field_value) catch @panic("could not 'put' to fields_values in parse_struct_init_expr\n");
+            
+        }
+
+        struct_expr_ptr.* = EXPRESSIONS {
+            .struct_expr = .{
+                .struct_name = struct_name,
+                .fields_values = fields_values,
+            }
+        };
+
+        return struct_expr_ptr;
+    }
 
     //////////////////////// SUB-EXPRESSIONS /////////////////////// end  //// 
 
@@ -606,14 +647,17 @@ pub const Parser = struct {
                 expr_ptr  = self.parse_literal_expr();
             },
 
-            .base_identifier => // could be fn_call or literal_expr
+            .base_identifier => // could be fn_call or literal_expr or struct_init_expr
             {
 
                 self.expect_advance_token(.base_identifier); // first skip id-name, if '(' appears, it is a fn_call expr
                 if(self.expect_token(.base_left_paren)) { // fn_call expr
                     self.putback_token();
                     expr_ptr = self.parse_fn_call_expr();
-                } else {
+                } else if(self.expect_token(.base_left_braces)) { // struct_init_expr
+                    self.putback_token();
+                    expr_ptr = self.parse_struct_init_expr();
+                } else { // literal_expr
                     self.putback_token();
                     expr_ptr = self.parse_literal_expr();
                 }
@@ -653,6 +697,9 @@ pub const Parser = struct {
             .base_left_braces => // in stmts, like if 1 + 2 + 3 > 0 { .. }
             self.advance_token(),
 
+            .base_colon => // in for-statement ~ for ID in EXPR ":" EXPR ..
+            self.advance_token(),
+
             else => 
             {
                 print("got token :: {any}\n", .{tok});
@@ -671,9 +718,96 @@ pub const Parser = struct {
 
     //////////////////////// STATEMENTS /////////////////////////// start ///
 
-    //////////////////////// STATEMENTS /////////////////////////// start ///
+    
+    fn parse_for_stmt(self: *Self) void {
+
+        self.expect_advance_token(.keyword_for);
+        if(!self.expect_token(.base_identifier)) @panic("in for-loop, expected, identifier_name after .keyword_for\n");
+
+        const identifier_name = self.peek_token().lexeme.?;
+        self.expect_advance_token(.base_identifier);
+
+        self.expect_advance_token(.keyword_in);
+
+        const range_expr1 = self.parse_expr();
+        const range_expr2 = self.parse_expr();
+
+        _ = range_expr1;
+        _ = range_expr2;
+        _ = identifier_name;
+
+        self.putback_token(); // parse_expr consumes .base_left_braces
+        self.expect_advance_token(.base_left_braces);
+    }
 
 
+
+    //////////////////////// STATEMENTS /////////////////////////// end ///
+
+
+    ////////////////////// ASSIGNMENTS /////////////////////////// start ////
+
+    
+    // 
+    // assignments may be simple decl ~ a :: mut i32;
+    // or, ~ a :: mut i32 = 1 + 2;
+    pub fn parse_assign_stmt(self: *Self) STATEMENTS {
+
+        const lvalue_name = self.peek_token().lexeme.?;
+        self.expect_advance_token(.base_identifier);
+        self.expect_advance_token(.base_type_colon);
+
+        const lvalue_type = self.parse_type();
+
+        if(!self.expect_token(.base_assign)) { // simple decl
+            self.expect_advance_token(.base_semicolon);
+
+            return STATEMENTS {
+                .assignment = .{
+                    .lvalue_name = lvalue_name,
+                    .lvalue_type = lvalue_type,
+                    .rvalue_expr = null,
+                }
+            };
+
+        }
+
+
+        self.expect_advance_token(.base_assign);
+
+        const rvalue_expr = self.parse_expr();
+
+        return STATEMENTS {
+            .assignment = .{
+                .lvalue_name = lvalue_name,
+                .lvalue_type = lvalue_type,
+                .rvalue_expr = rvalue_expr,
+            }
+        };
+
+    }
+
+    pub fn parse_var_update_stmt(self: *Self) STATEMENTS {
+
+        const lvalue_name = self.peek_token().lexeme.?;
+        self.expect_advance_token(.base_identifier);
+
+        const update_op = self.which_update_operator();
+
+        const rvalue_expr = self.parse_expr();
+
+        return STATEMENTS {
+            .update = .{
+                .lvalue_name = lvalue_name,
+                .update_op = update_op,
+                .rvalue_expr = rvalue_expr,
+            }
+        };
+
+    }
+
+
+    ////////////////////// ASSIGNMENTS /////////////////////////// end /////
 
 
     //
@@ -682,6 +816,7 @@ pub const Parser = struct {
         
         switch(self.peek_token().kind) {
             
+            .base_assign,
             .base_add, .base_sub,
             .base_div, .common_mul,
             .base_exp, .base_mod,
@@ -703,10 +838,15 @@ pub const Parser = struct {
     // 
     // which update-op is next, consume it
     pub fn which_update_operator(self: *Self) UPDATE_OPERATORS {
-        if(self.is_update_operator() == false) @panic("is_update_operator returned false, in which_update_operator\n");
+        
+        if(self.expect_token(.base_assign))  { 
+            self.expect_advance_token(.base_assign);
+            return UPDATE_OPERATORS.ASSIGN;
+
+        }
 
         const operator = self.peek_token().kind;
-        self.advance_token(); // consume - operator
+        self.advance_token(); // consume - operator in '-='
         self.expect_advance_token(.base_assign); // OPERATOR should precede .base_assign in update-op
 
         return switch(operator) {
@@ -725,33 +865,6 @@ pub const Parser = struct {
         };
 
     }
-
-    //
-    // is peek_token an update-operator
-    pub fn is_update_operator(self: *Self) bool {
-
-        const is_op = self.is_operator();
-        if(is_op == false) return false;
-
-        // a and= 6, is not valid, nor is a or= 7
-        const tok = self.peek_token().kind;
-        if((tok == .keyword_and) or (tok == .keyword_or)) return false;
-
-        self.advance_token();
-
-        const tok1 = self.peek_token().kind;
-        if(tok1 == .base_assign) {
-            self.putback_token();
-            return true;
-
-        } else {
-            self.putback_token();
-            return false;
-
-        }
-
-    }
-
 
     //
     // look at next token without consuming it
@@ -830,7 +943,7 @@ pub const Parser = struct {
 
 test {
     print("-- TEST LITERALS\n", .{});
-    var parser = Parser.init_for_tests("A.B.C;");
+    var parser = Parser.init_for_tests("0;");
     
     _ = parser.parse_literals();
 
@@ -842,17 +955,20 @@ test {
 
 test {
     print("-- TEST PARSE EXPRESSIONS\n", .{});
-    var parser = Parser.init_for_tests("a+b; c-d;");
+    var parser = Parser.init_for_tests("a+1; x; c-d;");
 
     var parsed = parser.parse_expr();
     print("1 :: {s} {any} {s}\n", .{
         parsed.literal_expr.inner_literal.variable.inner_value,
         parsed.literal_expr.inner_expr.operator_expr.inner_operator,
-        parsed.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal.variable.inner_value
+        parsed.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal.number.inner_value
     });
 
     parsed = parser.parse_expr();
-    print("2 :: {s} {any} {s}\n", .{
+    print("2 :: {s}\n", .{parsed.literal_expr.inner_literal.variable.inner_value});
+
+    parsed = parser.parse_expr();
+    print("3 :: {s} {any} {s}\n", .{
         parsed.literal_expr.inner_literal.variable.inner_value,
         parsed.literal_expr.inner_expr.operator_expr.inner_operator,
         parsed.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal.variable.inner_value
@@ -890,6 +1006,109 @@ test {
 
     const parsed = parser.parse_expr();
     _ = parsed;
+
+    print("passed..\n\n", .{});
+
+}
+
+test {
+    print("-- TEST PARSE FOR STATMENTS\n", .{});
+    var parser = Parser.init_for_tests("for x in 0 : 100 {}");
+
+    const parsed = parser.parse_for_stmt();
+    _ = parsed;
+
+    print("passed..\n\n", .{});
+
+}
+
+test {
+    print("-- TEST PARSE STRUCT-INIT-EXPR\n", .{});
+    var parser = Parser.init_for_tests("numbers {.a = b, .b = 200, .c = math { .pi = 3.14, }, .d = 0, }");
+
+    const parsed = parser.parse_expr();
+    _ = parsed;
+
+    print("passed..\n\n", .{});
+
+}
+
+test {
+    print("-- TEST PARSE ASSIGNMENT\n", .{});
+    var parser = Parser.init_for_tests("a :: mut i32 = 1 + 2; b :: i64 = 128; c :: String;");
+
+    var parsed = parser.parse_assign_stmt();
+
+    print("lvalue_name :: {s}\n", .{parsed.assignment.lvalue_name});
+    print("lvalue_type :: {any}\n", .{parsed.assignment.lvalue_type});
+    print("rvalue_expr :: {any}\n", .{parsed.assignment.rvalue_expr});
+
+    parsed = parser.parse_assign_stmt();
+
+    print("lvalue_name :: {s}\n", .{parsed.assignment.lvalue_name});
+    print("lvalue_type :: {any}\n", .{parsed.assignment.lvalue_type});
+    print("rvalue_expr :: {any}\n", .{parsed.assignment.rvalue_expr});
+
+    parsed = parser.parse_assign_stmt();
+
+    print("lvalue_name :: {s}\n", .{parsed.assignment.lvalue_name});
+    print("lvalue_type :: {any}\n", .{parsed.assignment.lvalue_type});
+    print("rvalue_expr :: {any}\n", .{parsed.assignment.rvalue_expr});
+
+
+    print("passed..\n\n", .{});
+
+}
+
+
+test {
+    print("-- TEST PARSE STRUCT ASSIGNMENT\n", .{});
+    var parser = Parser.init_for_tests("d :: mut logger = logger { .level = 0, .warn = a.b.c.d.e, };");
+
+    const parsed = parser.parse_assign_stmt();
+    _ = parsed;
+
+
+    print("passed..\n\n", .{});
+
+}
+
+test {
+    print("-- TEST PARSE WHICH UPDATE-OP\n", .{});
+    var parser = Parser.init_for_tests("+= -= = **= >>= <<= *=");
+
+    var parsed = parser.which_update_operator();
+    print("{any}\n", .{parsed});
+
+    parsed = parser.which_update_operator();
+    print("{any}\n", .{parsed});
+
+    parsed = parser.which_update_operator();
+    print("{any}\n", .{parsed});
+
+    parsed = parser.which_update_operator();
+    print("{any}\n", .{parsed});
+
+    parsed = parser.which_update_operator();
+    print("{any}\n", .{parsed});
+
+    parsed = parser.which_update_operator();
+    print("{any}\n", .{parsed});
+
+    parsed = parser.which_update_operator();
+    print("{any}\n", .{parsed});
+
+    print("passed..\n\n", .{});
+
+}
+
+test {
+    print("-- TEST PARSE  UPDATE_OP\n", .{});
+    var parser = Parser.init_for_tests("x >>= 32;");
+
+    const parsed = parser.parse_var_update_stmt();
+    print("{any}\n", .{parsed});
+
 
     print("passed..\n\n", .{});
 

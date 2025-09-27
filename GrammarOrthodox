@@ -9,11 +9,11 @@ block       -> "{" [ ASSIGNMENT | VAR_UPDATE | expr | stmt ]* "}"
 expr        -> literals op-expr | op-expr | fn_call expr | break_expr  | return_expr  | grouped_expr | NULL
 
 stmt         -> if_stmt | for_stmt
+if_stmt      -> "if" expr  "{" block "}" [ "elif" expr "{" block "}"]* [ "else" "{" block "}"]
+for_stmt     -> "for" IDENTIFIER "in" expr ":" expr  "{" block "}"
 
 op-expr      -> OPERATOR expr
 fn_call      -> IDENTIFIER "(" [ expr ","? ]* ")"
-if_stmt      -> "if" expr ":" "{" block "}" [ "elif" expr ":" "{" block "}"]* [ "else" ":" "{" block "}"]
-for_stmt     -> "for" IDENTIFIER "in" expr ":" expr ":" "{" block "}"
 break_expr   -> "break" expr
 return_expr  -> "return" expr
 grouped_expr -> "(" expr ")"

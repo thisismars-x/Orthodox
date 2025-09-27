@@ -21,9 +21,9 @@ logger :: struct = {
 
 default_logger :: fn() = {
   return logger {
-    level = 1,
-    msg = "$$ error occured at line 12 $$",
-    debug_with_panic = true,
+    .level = 1,
+    .msg = "$$ error occured at line 12 $$",
+    .debug_with_panic = true,
   };
 }
 

@@ -414,104 +414,96 @@ pub const StreamLexer = struct {
     // does not identify preceding +/- signs, as they are considered
     // as part of expressions, opposed to literal-numbers
     pub fn scan_number(self: *Self) Token {
-        const start = self.pos;
-        var is_float = false;
 
-        // hex and binary numbers may not be float
-        var is_bin = false;
-        var is_hex = false;
+            const start = self.pos;
+            var is_float = false;
 
-        // check binary/hex prefix, sanitize string later
-        if(self.peek()) |x| {
-            if(x == '0') {
-                _ = self.advance();
-
-                if(self.peek()) |y| {
-                    _ = self.advance(); 
-                        if(self.peek()) |z| {
-                            if(is_digit(z) or (z >= 'a' and z <= 'z') or (z >= 'A' and z <= 'Z')) { // 0_* may be followed by number, or hex
-                                if(y == 'x' or y == 'X') { is_hex = true; }
-                                else if(y == 'b' or y == 'B') { is_bin = true; }
-                                else @panic("incomplete bin/hex number prefix\n");
-                            }
-                        }
-                    
-                }
-            }
-        }
-
-        while (self.peek()) |c| {
-            if(is_bin) {
-                if(c == '0' or c == '1') { _ = self.advance(); }
-                else break;
-
-            } else if(is_hex) {
-                if(is_digit(c) or (c >= 'a' and c <= 'h') or (c >= 'A' and c <= 'H')) { _ = self.advance(); }
-                else break;
-
-            } else {
-                if (is_digit(c)) { _ = self.advance(); }
-                else break;
-            }
-        }
-
-        if (self.peek()) |c| {
-            if (c == '.') {
-                is_float = true;
-            }
-        }
-
-        if((is_float) and (is_hex or is_bin)) @panic("no floating point allowed with bin/hex prefix\n");
-
-        if (is_float) {
-            _ = self.advance();
-
-            if (self.peek()) |first| {
-                if (!is_digit(first)) self.error_dump(LexError.MalformedNumber);
-            }
 
             while (self.peek()) |c| {
                 if (is_digit(c)) {
                     _ = self.advance();
+
                 } else {
                     break;
-                }
-            }
-        }
 
-        // check for exponent part
-        if (self.peek()) |is_exp| {
-            if (is_exp == 'e' or is_exp == 'E') {
-                is_float = true;
+                }
+
+            }
+
+
+            if (self.peek()) |c| {
+                if (c == '.') {
+                    is_float = true;
+
+                }
+
+            }
+
+
+            if (is_float) {
                 _ = self.advance();
 
-                // optional sign
-                if (self.peek()) |sign| {
-                    if (sign == '+' or sign == '-') _ = self.advance();
+                if (self.peek()) |first| {
+                    if (!is_digit(first)) self.error_dump(LexError.MalformedNumber);
+
                 }
 
-                while (self.peek()) |mantissa| {
-                    if (is_digit(mantissa)) {
+                while (self.peek()) |c| {
+                    if (is_digit(c)) {
                         _ = self.advance();
-                    } else break;
+
+                    } else {
+                        break;
+
+                    }
+
                 }
+
             }
+
+
+
+            // check for exponent part
+            if (self.peek()) |is_exp| {
+                if (is_exp == 'e' or is_exp == 'E') {
+                    is_float = true;
+                    _ = self.advance();
+
+                    // optional sign
+                    if (self.peek()) |sign| {
+                        if (sign == '+' or sign == '-') _ = self.advance();
+
+                    }
+
+                    while (self.peek()) |mantissa| {
+                        if (is_digit(mantissa)) {
+                            _ = self.advance();
+
+                        } else break;
+
+                    }
+
+                }
+
+            }
+
+            const lexeme = self.source[start..self.pos];
+
+            if (is_float) return Token{
+                .kind = .literal_float,
+                .lexeme = lexeme,
+                .span = .{self.pos, self.line},
+
+            };
+
+            return Token{
+                .kind = .literal_number,
+                .lexeme = lexeme,
+                .span = .{self.pos, self.line},
+
+            };
+
         }
-
-        const lexeme = self.source[start..self.pos];
-
-        if (is_float) return Token{
-            .kind = .literal_float,
-            .lexeme = lexeme,
-            .span = .{ self.pos, self.line },
-        };
-
-        return Token{
-            .kind = .literal_number,
-            .lexeme = lexeme,
-            .span = .{ self.pos, self.line },
-        };
-    }
 
     //
     // scan single line string
@@ -732,10 +724,4 @@ pub const StreamLexer = struct {
 //
 //     print("Token-id: {}, Token-lexeme {s}\n", .{ token.kind, token.lexeme.? });
 // }
-//
-// test "scan number" {
-//     var lexer = StreamLexer.raw_init("0b00001000", "some-file");
-//     const token = lexer.scan_number();
-//
-//     print("Token-id: {}, Token-lexeme {s}\n", .{ token.kind, token.lexeme.? });
-// }
+
