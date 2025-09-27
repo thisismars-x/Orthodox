@@ -4,7 +4,7 @@
 
 -- block, expressions, literals ------>
 
-block       -> "{" [ ASSIGNMENT | VAR_UPDATE | expr | stmt ]* "}"
+block       -> "{" [ ASSIGNMENT | VAR_UPDATE  | stmt ]* "}"
 
 expr        -> literals op-expr | op-expr | fn_call expr | break_expr  | return_expr  | grouped_expr | NULL
 

@@ -96,8 +96,13 @@ pub const STATEMENTS = union(enum) {
 
     for_stmt: struct {
         identifier_name: []const u8,
-        range_expr1: EXPRESSIONS,
-        range_expr2: EXPRESSIONS,
+        range_expr1: *EXPRESSIONS,
+        range_expr2: *EXPRESSIONS,
+        for_block: *STATEMENTS,
+    },
+
+    loop_stmt: struct {
+        loop_block: *STATEMENTS,
     },
 
     assignment: struct {
@@ -112,25 +117,9 @@ pub const STATEMENTS = union(enum) {
         rvalue_expr: *EXPRESSIONS,
     },
 
-};
-
-pub const BLOCK = union(enum) {
-    
-    ASSIGNMENT: struct {
-        variable_name: []const u8,
-        variable_type: TYPES,
-        variable_value: ?EXPRESSIONS,
+    block: struct {
+        inner_elements: std.ArrayList(STATEMENTS),
     },
-
-    UPDATE: struct {
-        updated_variable: LITERALS,
-        UPDATE_OPERATOR: UPDATE_OPERATORS,
-        update_with: EXPRESSIONS,
-    },
-
-    EXPRESSION: EXPRESSIONS,
-
-    STATEMENT: STATEMENTS,
 
 };
 

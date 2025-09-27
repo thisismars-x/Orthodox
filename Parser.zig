@@ -18,7 +18,6 @@ const LITERALS = AST.LITERALS;
 const EXPRESSIONS = AST.EXPRESSIONS;
 const OPERATORS = AST.OPERATORS;
 const UPDATE_OPERATORS = AST.UPDATE_OPERATORS;
-const BLOCK_ELEMENTS = AST.BLOCK_ELEMENTS;
 const STATEMENTS = AST.STATEMENTS;
 
 pub usingnamespace token_id;
@@ -478,6 +477,10 @@ pub const Parser = struct {
                 operator = OPERATORS.MINUS;
             },
 
+            .base_left_shift => {
+                operator = OPERATORS.LEFT_SHIFT;
+            },
+
             else => @panic("TODO:: add other operators"),
             
         }
@@ -604,7 +607,6 @@ pub const Parser = struct {
 
             self.expect_advance_token(.base_dot);
             const field_name = self.peek_token().lexeme.?;
-            print("{s}\n", .{field_name});
             self.expect_advance_token(.base_identifier);
             
             self.expect_advance_token(.base_assign);
@@ -699,7 +701,8 @@ pub const Parser = struct {
                 self.expect_advance_token(.base_right_paren);
             },
 
-            .base_add, .base_sub =>
+            .base_add, .base_sub,
+            .base_left_shift =>
             {
                 expr_ptr = self.parse_op_expr();
             },
@@ -729,10 +732,10 @@ pub const Parser = struct {
 
 
 
-    //////////////////////// STATEMENTS /////////////////////////// start ///
+    //////////////////////// LOOP /////////////////////////// start ///
 
     
-    fn parse_for_stmt(self: *Self) void {
+    fn parse_for_stmt(self: *Self) *STATEMENTS {
 
         self.expect_advance_token(.keyword_for);
         if(!self.expect_token(.base_identifier)) @panic("in for-loop, expected, identifier_name after .keyword_for\n");
@@ -745,17 +748,45 @@ pub const Parser = struct {
         const range_expr1 = self.parse_expr();
         const range_expr2 = self.parse_expr();
 
-        _ = range_expr1;
-        _ = range_expr2;
-        _ = identifier_name;
+        const for_block_ptr = Self.default_allocator.create(STATEMENTS) catch @panic("unable to allocate memory in parse_for_stmt\n");
+        for_block_ptr.* = self.parse_block();
 
-        self.putback_token(); // parse_expr consumes .base_left_braces
-        self.expect_advance_token(.base_left_braces);
+        const return_for_block_ptr = Self.default_allocator.create(STATEMENTS) catch @panic("unable to allocate memory in parse_for_stmt\n");
+
+        return_for_block_ptr.* = STATEMENTS {
+            .for_stmt = .{
+                .identifier_name = identifier_name,
+                .range_expr1 = range_expr1,
+                .range_expr2 = range_expr2,
+                .for_block = for_block_ptr,
+            }
+        };
+
+        return return_for_block_ptr;
+    }
+
+    pub fn parse_loop_stmt(self: *Self) *STATEMENTS {
+        self.expect_advance_token(.keyword_loop);
+
+        self.expect_advance_token(.base_colon);
+
+        const loop_block_ptr = Self.default_allocator.create(STATEMENTS) catch @panic("unable to allocate memory in parse_for_stmt\n");
+        loop_block_ptr.* = self.parse_block();
+
+        const return_loop_block_ptr = Self.default_allocator.create(STATEMENTS) catch @panic("unable to allocate memory in parse_for_stmt\n");
+
+        return_loop_block_ptr.* = STATEMENTS {
+            .loop_stmt = .{
+                .loop_block = loop_block_ptr,
+            }
+        };
+
+        return return_loop_block_ptr;
     }
 
 
 
-    //////////////////////// STATEMENTS /////////////////////////// end ///
+    //////////////////////// LOOP /////////////////////////// end ///
 
 
 
@@ -827,15 +858,114 @@ pub const Parser = struct {
 
 
 
+
     ////////////////////// CONDITIONALS ///////////////////////// start ////
 
-    pub fn parse_if_stmt(self: *Self) STATEMENTS {
+    pub fn parse_if_stmt(self: *Self) void {
 
     }
 
-
     ////////////////////// CONDITIONALS ///////////////////////// end //////
 
+
+
+
+
+    //////////////////////// BLOCK ///////////////////////////// start /////
+
+    pub fn parse_block(self: *Self) STATEMENTS {
+
+        var block_elem = std.ArrayList(STATEMENTS).init(Self.default_allocator);
+
+        self.expect_advance_token(.base_left_braces);
+
+        while(true) {
+            const tok = self.peek_token();
+            switch(tok.kind) {
+
+                // nested block_stmt
+                .base_left_braces =>
+                {
+                    const block = self.parse_block();
+                    block_elem.append(block) catch @panic("can not append to block_elem\n");
+                },
+
+
+                .base_right_braces =>
+                break,
+
+
+                // assignment, update
+                .base_identifier => 
+                {
+                    _  = self.expect_advance_token(.base_identifier);
+
+                    if(self.expect_token(.base_type_colon)) { // assignment
+                        self.putback_token();
+                        const assign_stmt = self.parse_assign_stmt();
+                        block_elem.append(assign_stmt) catch @panic("can not append to block_elem\n");
+
+                    } else if(self.peek_is_operator()) {
+                        const which_op = self.peek_token().kind;
+                        self.advance_token();
+
+                        if(which_op != .base_assign) {
+                            if(self.expect_token(.base_assign)) { // update
+                                self.putback_token();
+                                self.putback_token();
+                                const var_stmt = self.parse_var_update_stmt();
+                                block_elem.append(var_stmt) catch @panic("can not append to block_elem\n");
+
+                            } else { // expr ~ can not occur
+                                @panic("expr, can not occur within block_stmts\n");
+                            }
+
+                        } else { // update by assignment
+                            self.putback_token();
+                            self.putback_token();
+                            const var_stmt = self.parse_var_update_stmt();
+                            block_elem.append(var_stmt) catch @panic("can not append to block_elem\n");
+                        }
+
+                    } else { // expr ~ can not occur
+                        @panic("expr, can not occur within block_stmts\n");
+                    }
+                },
+
+                // for-stmt
+                .keyword_for =>
+                { 
+                    const for_stmt = self.parse_for_stmt();
+                    block_elem.append(for_stmt.*) catch @panic("can not append to block_elem\n");
+                },
+
+                // loop-stmt
+                .keyword_loop =>
+                { 
+                    const loop_stmt = self.parse_for_stmt();
+                    block_elem.append(loop_stmt.*) catch @panic("can not append to block_elem\n");
+                },
+
+
+
+
+
+
+
+                else =>
+                @panic("todo"),
+            }
+        }
+
+        return STATEMENTS {
+           .block = .{
+                .inner_elements = block_elem, 
+            }
+        };
+
+    }
+
+    //////////////////////// BLOCK ///////////////////////////// end ///////
 
 
     //
@@ -1040,11 +1170,47 @@ test {
 }
 
 test {
+    print("-- TEST PARSE LOOP STATMENTS\n", .{});
+    var parser = Parser.init_for_tests("loop : { a = x + 100; }");
+
+    const parsed = parser.parse_loop_stmt();
+    const loop_parsed = parsed.loop_stmt.loop_block.block.inner_elements.items[0];
+
+    print("<{s}> <{any}> <{s}> <{any}> <{s}>\n", .{
+        loop_parsed.update.lvalue_name,
+        loop_parsed.update.update_op,
+        loop_parsed.update.rvalue_expr.literal_expr.inner_literal.variable.inner_value,
+        loop_parsed.update.rvalue_expr.literal_expr.inner_expr.operator_expr.inner_operator,
+        loop_parsed.update.rvalue_expr.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal.number.inner_value,
+    });
+
+    print("passed..\n\n", .{});
+
+}
+
+test {
     print("-- TEST PARSE FOR STATMENTS\n", .{});
-    var parser = Parser.init_for_tests("for x in 0 : 100 {}");
+    var parser = Parser.init_for_tests("for x in ZERO : ONE >> 32 : { a = x + 100; }");
 
     const parsed = parser.parse_for_stmt();
-    _ = parsed;
+    const for_parsed = parsed.for_stmt;
+
+    print("for <{s}> in <{s}> : <{s}> <{any}> <{s}>\n", .{
+            for_parsed.identifier_name,
+            for_parsed.range_expr1.literal_expr.inner_literal.variable.inner_value,
+            for_parsed.range_expr2.literal_expr.inner_literal.variable.inner_value,
+            for_parsed.range_expr2.literal_expr.inner_expr.operator_expr.inner_operator,
+            for_parsed.range_expr2.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal.number.inner_value,
+    });
+
+    const for_parsed_blk = for_parsed.for_block.block.inner_elements.items[0];
+    print("<{s}> <{any}> <{s}> <{any}> <{s}>\n", .{
+        for_parsed_blk.update.lvalue_name,
+        for_parsed_blk.update.update_op,
+        for_parsed_blk.update.rvalue_expr.literal_expr.inner_literal.variable.inner_value,
+        for_parsed_blk.update.rvalue_expr.literal_expr.inner_expr.operator_expr.inner_operator,
+        for_parsed_blk.update.rvalue_expr.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal.number.inner_value,
+    });
 
     print("passed..\n\n", .{});
 
@@ -1160,4 +1326,32 @@ test {
 
     print("passed..\n\n", .{});
 
+}
+
+test {
+    print("-- TEST PARSE BLOCK_EXPR\n", .{});
+
+    var parser = Parser.init_for_tests("{ c :: mut i32 = 1; c += 100; { e :: String; } }");
+    const parsed = parser.parse_block();
+
+    const parsed_blk = parsed.block.inner_elements.items;
+    print("{any}\n", .{parsed_blk[0]});
+    print("{any}\n", .{parsed_blk[1]});
+    print("{any}\n", .{parsed_blk[2].block.inner_elements.items[0]});
+
+    print("passed..\n\n", .{});
+}
+
+test {
+    print("-- TEST PARSE BLOCK_EXPR\n", .{});
+
+    var parser = Parser.init_for_tests("{ c :: mut i32 = 1; c += 100 + 200; for i in 0 : 100 : { s = \"stringosis\"; } }");
+    const parsed = parser.parse_block();
+
+    const parsed_blk = parsed.block.inner_elements.items;
+    print("{any}\n", .{parsed_blk[0]});
+    print("{any}\n", .{parsed_blk[1]});
+    print("{any}\n", .{parsed_blk[2].for_stmt});
+
+    print("passed..\n\n", .{});
 }
