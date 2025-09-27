@@ -597,18 +597,31 @@ pub const Parser = struct {
         self.expect_advance_token(.base_left_braces);
 
         while(true) {
-            if(self.peek_token().kind == .base_right_braces) break;
+            if(self.expect_token(.base_right_braces))  {
+                self.expect_advance_token(.base_right_braces);
+                break;
+            }
 
             self.expect_advance_token(.base_dot);
             const field_name = self.peek_token().lexeme.?;
             print("{s}\n", .{field_name});
             self.expect_advance_token(.base_identifier);
-
+            
             self.expect_advance_token(.base_assign);
 
             const field_value = self.parse_expr();
+            switch(field_value.*) { // if a field inside a struct is init with a struct-def, '}' of that struct-def is used as delimiter for that struct ending, but we require, .base_comma after every field
+                .struct_expr => 
+                self.expect_advance_token(.base_comma),
+
+                else => 
+                {}
+            }
+
 
             fields_values.put(field_name, field_value) catch @panic("could not 'put' to fields_values in parse_struct_init_expr\n");
+
+            if(self.expect_token(.base_comma)) self.expect_advance_token(.base_comma);
             
         }
 
@@ -745,6 +758,9 @@ pub const Parser = struct {
     //////////////////////// STATEMENTS /////////////////////////// end ///
 
 
+
+
+
     ////////////////////// ASSIGNMENTS /////////////////////////// start ////
 
     
@@ -808,6 +824,18 @@ pub const Parser = struct {
 
 
     ////////////////////// ASSIGNMENTS /////////////////////////// end /////
+
+
+
+    ////////////////////// CONDITIONALS ///////////////////////// start ////
+
+    pub fn parse_if_stmt(self: *Self) STATEMENTS {
+
+    }
+
+
+    ////////////////////// CONDITIONALS ///////////////////////// end //////
+
 
 
     //
@@ -1029,6 +1057,7 @@ test {
     const parsed = parser.parse_expr();
     _ = parsed;
 
+
     print("passed..\n\n", .{});
 
 }
@@ -1063,11 +1092,12 @@ test {
 
 test {
     print("-- TEST PARSE STRUCT ASSIGNMENT\n", .{});
-    var parser = Parser.init_for_tests("d :: mut logger = logger { .level = 0, .warn = a.b.c.d.e, };");
+    var parser = Parser.init_for_tests("d :: mut logger = logger { .level = 0, .warn = a.b.c.d.e, }");
 
     const parsed = parser.parse_assign_stmt();
     _ = parsed;
 
+    print("{any} :: \n", .{parser.peek_token()});
 
     print("passed..\n\n", .{});
 
@@ -1104,10 +1134,28 @@ test {
 
 test {
     print("-- TEST PARSE  UPDATE_OP\n", .{});
-    var parser = Parser.init_for_tests("x >>= 32;");
+
+    const s = 
+    \\ temp_logger = logger {
+    \\      .which = file {
+    \\         .number = stdout { 
+    \\            .yes  = yes,
+    \\            .buffer = "IONBF",
+    \\            .time = timespec {
+    \\                .nsec = 100,
+    \\                .sec = 200 + 300,
+    \\            },
+    \\         },
+    \\       },
+    \\ };
+    ;
+
+    var parser = Parser.init_for_tests(s);
 
     const parsed = parser.parse_var_update_stmt();
     print("{any}\n", .{parsed});
+
+    print("{any}\n", .{parser.peek_token()});
 
 
     print("passed..\n\n", .{});
