@@ -2,6 +2,14 @@
 ///// Grammar For ORthodox //////////// Grammar For ORthodox //////////// Grammar For ORthodox ///////
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
+-- program ----------------------->
+
+program    ->  [ struct-def | enum-def | function-def ]*
+
+--------------------------------end
+
+
+
 -- block, expressions, literals ------>
 
 block       -> "{" [ ASSIGNMENT | VAR_UPDATE  | stmt ]* "}"
@@ -18,7 +26,7 @@ break_expr   -> "break" expr
 return_expr  -> "return" expr
 grouped_expr -> "(" expr ")"
 
-literals    -> number | string | IDENTIFIER | member_access
+literals    -> number | string | IDENTIFIER | member_access | array_access
 
 member_access ->  IDENTIFIER [ "." IDENTIFIER ]+
 

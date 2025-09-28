@@ -220,6 +220,14 @@ pub const LITERALS = union(enum) {
     member_access: struct { // member access for record-types(enums and structs)
         record_type_name: []const u8,
         members_name_in_order: std.ArrayList([]const u8),
+    },
+
+    // array access are only allowed to one-level
+    // x.y.z[100][200][300] just complicates life
+    // instead: a :: mut i32 = x.y.z[100]; a = a[200]; a = a[300];
+    array_access: struct { // access array's access-index'th index
+        array_var: *LITERALS,
+        access_index: *EXPRESSIONS,
     }
 };
 

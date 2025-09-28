@@ -85,6 +85,69 @@ pub const Parser = struct {
         return parser;
     }
 
+
+    /////////////////// PARSE-PROGRAM ///////////////////////// start ////////////////
+    
+    //
+    // a program consists of a sequence of struct | enum | function definitions
+    pub fn parse_program(self: *Self) std.ArrayList(DEFINITIONS) {
+
+        var program = std.ArrayList(DEFINITIONS).init(Self.default_allocator);
+
+        while(!self.expect_token(.base_EOF)) {
+
+            self.expect_advance_token(.base_identifier); // struct | enum | fn name
+            self.expect_advance_token(.base_type_colon);
+
+
+            const tok = self.peek_token();
+            switch(tok.kind) {
+
+                .keyword_struct =>
+                {
+                    self.putback_token(); // .base_type_colon
+                    self.putback_token(); // struct_name
+
+                    const struct_def = self.parse_struct_def();
+                    program.append(struct_def) catch @panic("could not append struct_def to program");
+
+                },
+
+                .keyword_enum => 
+                {
+                    self.putback_token(); // .base_type_colon
+                    self.putback_token(); // enum_name
+
+                    const enum_def = self.parse_enum_def();
+                    program.append(enum_def) catch @panic("could not append enum_def to program");
+
+                },
+
+                .keyword_function => 
+                {
+                    self.putback_token(); // .base_type_colon 
+                    self.putback_token(); // fn_name
+                    
+                    const fn_def = self.parse_fn_def();
+                    program.append(fn_def) catch @panic("could not append fn_def to program");
+
+                },
+
+                else =>
+                @panic("only, struct | enum | function def are allowed in a program\n"),
+
+            }
+
+
+        }
+
+        return program;
+
+    }
+
+    /////////////////// PARSE-PROGRAM ///////////////////////// end //////////////////
+
+
     //
     // All types are parsed here
     pub fn parse_type(self: *Self) *TYPES { // VERIFIED
@@ -473,7 +536,25 @@ pub const Parser = struct {
             },
         }
 
+        // check if followed by array-access syntax
         self.advance_token();
+
+        const array_var = Self.default_allocator.create(LITERALS) catch @panic("unable to allocate memory in parse_literals\n");
+        if(self.expect_token(.base_left_bracket)) { // array-access
+            array_var.* = return_literal;
+
+            self.expect_advance_token(.base_left_bracket);
+
+            const access_index = self.parse_expr(); // parse_expr consumes ']'
+
+            return_literal = LITERALS {
+                .array_access = .{
+                    .array_var = array_var,
+                    .access_index = access_index,
+                }
+            };
+        }
+
         return return_literal;
     }
 
@@ -758,7 +839,6 @@ pub const Parser = struct {
             self.advance_token();
 
             const inner_expr = self.parse_expr();
-            print("{any}\n", .{inner_expr});
             arg_list.append(inner_expr) catch @panic("could not append to arg_list in parse_fn_call_expr\n");
         }
 
@@ -859,6 +939,8 @@ pub const Parser = struct {
             
         }
 
+        self.expect_advance_token(.base_semicolon);
+
         struct_expr_ptr.* = EXPRESSIONS {
             .struct_expr = .{
                 .struct_name = struct_name,
@@ -946,6 +1028,9 @@ pub const Parser = struct {
             self.advance_token(),
 
             .base_colon => // in for-statement ~ for ID in EXPR ":" EXPR ..
+            self.advance_token(),
+
+            .base_right_bracket => // access array
             self.advance_token(),
 
             else => 
@@ -1256,9 +1341,14 @@ pub const Parser = struct {
                     block_elem.append(if_stmt.*) catch @panic("can not append to block_elem\n");
                 },
 
+                .base_semicolon =>
+                self.advance_token(),
 
-                else =>
-                @panic("todo"),
+
+                else => {
+                    print("got :: {any}\n", .{tok.kind});
+                    @panic("unacceptable stmt inside parse_block\n");
+                },
             }
         }
 
@@ -1472,6 +1562,8 @@ test {
     const parsed = parser.parse_expr();
     _ = parsed;
 
+    print("{any}\n", .{parser.peek_token().kind});
+
     print("passed..\n\n", .{});
 
 }
@@ -1525,7 +1617,7 @@ test {
 
 test {
     print("-- TEST PARSE STRUCT-INIT-EXPR\n", .{});
-    var parser = Parser.init_for_tests("numbers {.a = b, .b = 200, .c = math { .pi = 3.14, }, .d = 0, }");
+    var parser = Parser.init_for_tests("numbers {.a = b, .b = 200, .c = math { .pi = 3.14, };, .d = 0, };");
 
     const parsed = parser.parse_expr();
     _ = parsed;
@@ -1565,7 +1657,7 @@ test {
 
 test {
     print("-- TEST PARSE STRUCT ASSIGNMENT\n", .{});
-    var parser = Parser.init_for_tests("d :: mut logger = logger { .level = 0, .warn = a.b.c.d.e, }");
+    var parser = Parser.init_for_tests("d :: mut logger = logger { .level = 0, .warn = a.b.c.d.e, };");
 
     const parsed = parser.parse_assign_stmt();
     _ = parsed;
@@ -1617,9 +1709,9 @@ test {
     \\            .time = timespec {
     \\                .nsec = 100,
     \\                .sec = 200 + 300,
-    \\            },
-    \\         },
-    \\       },
+    \\            };,
+    \\         };,
+    \\       };,
     \\ };
     ;
 
@@ -1760,6 +1852,28 @@ test {
     _ = parsed;
 
     print("{any}\n", .{parser.peek_token().kind});
+
+    print("passed..\n\n", .{});
+}
+
+test {
+    print("-- TEST COMPLETE_PROGRAM\n", .{});
+
+    var parser = Parser.raw_init_with_file("./file.ox");
+    const parsed = parser.parse_program();
+
+    print("len :: {d}\n", .{parsed.items.len});
+    print("passed..\n\n", .{});
+}
+
+test {
+    print("-- TEST array-access\n", .{});
+
+    var parser = Parser.init_for_tests("__struct.inner_list[ other_array_give_index[i] ]");
+    const arr = parser.parse_literals().array_access;
+    // _ = arr;
+
+    print("{any}[{any}]\n", .{arr.array_var, arr.access_index});
 
     print("passed..\n\n", .{});
 }
