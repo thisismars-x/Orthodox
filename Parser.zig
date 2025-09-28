@@ -1517,7 +1517,7 @@ test {
 
 test {
     print("-- TEST POINTER TYPES\n", .{});
-    var parser = Parser.init_for_tests("mut ^some_struct");
+    var parser = Parser.init_for_tests("mut^ [100]some_struct");
     
     const parsed = parser.parse_type();
 
