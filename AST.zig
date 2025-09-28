@@ -156,6 +156,12 @@ pub const STATEMENTS = union(enum) {
         inner_elements: std.ArrayList(STATEMENTS),
     },
 
+    naked_expr: struct {
+        inner_expr: *EXPRESSIONS,
+    },
+
+    break_stmt,
+
 };
 
 pub const UPDATE_OPERATORS = enum {

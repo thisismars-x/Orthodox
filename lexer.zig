@@ -82,7 +82,7 @@ pub const StreamLexer = struct {
                 .span = .{ self.pos, self.line },
             };
 
-        if (c == '@' or c == '#' or c == '?' or is_alpha(c)) {
+        if (c == '@' or c == '#' or c == '?' or c == '^' or is_alpha(c)) {
             return self.scan_symbol();
         } else if (c == '"') {
             return self.scan_string();
@@ -122,6 +122,15 @@ pub const StreamLexer = struct {
                 _ = self.advance();
                 return Token{
                     .kind = .type_reference,
+                    .lexeme = null,
+                    .span = .{ self.pos, self.line },
+                };
+            },
+
+            '^' => {
+                _ = self.advance();
+                return Token{
+                    .kind = .type_pointer,
                     .lexeme = null,
                     .span = .{ self.pos, self.line },
                 };
@@ -317,11 +326,11 @@ pub const StreamLexer = struct {
                     if (c == '*') {
                         id = .base_exp;
                     } else {
-                        id = .common_mul;
+                        id = .base_mul;
                         already_skipped = true;
                     }
                 } else {
-                    id = .common_mul;
+                    id = .base_mul;
                     already_skipped = true;
                 }
             },

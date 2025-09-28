@@ -288,7 +288,7 @@ pub const Parser = struct {
 
             ///////////////// PTR, REF, ARRAYS  ////////////////// start /
 
-            .common_mul => { // pointer type
+            .type_pointer => { // pointer type
                 // in cases we have know that peek'ing token returns a fixed token, we call advance_token instead of expect_advance_token
                 self.advance_token(); 
 
@@ -734,7 +734,7 @@ pub const Parser = struct {
                 operator = OPERATORS.DIVIDE;
             },
 
-            .common_mul => {
+            .base_mul => {
                 operator = OPERATORS.MULTIPLY;
             },
 
@@ -810,36 +810,32 @@ pub const Parser = struct {
         return op_expr_ptr;
 
     }
-
+ 
     pub fn parse_fn_call_expr(self: *Self) *EXPRESSIONS {
         const fn_expr_ptr = Self.default_allocator.create(EXPRESSIONS) catch @panic("Unable to allocate memory in parse_fn_call_expr\n"); 
 
-        if(!self.expect_token(.base_identifier)) {
-            @panic("expected .base_identifier in parse_fn_call_expr\n");
-        } // fn_name
-
         const fn_name = self.peek_token().lexeme.?;
-        self.advance_token();
-
+        self.expect_advance_token(.base_identifier);
         self.expect_advance_token(.base_left_paren);
 
         var arg_list = std.ArrayList(*EXPRESSIONS).init(Self.default_allocator);
 
-        // arg-list
         while(true) {
-
-            // in parse_expr, .base_right_paren / .base_comma / .base_semicolon are consumed,
-            // hence putback, to check if token was ')' marking end of function call
-            self.putback_token();
             if(self.expect_token(.base_right_paren)) {
-                self.advance_token();
+                self.expect_advance_token(.base_right_paren);
                 break;
-            } 
+            }
+
+            const arg = self.parse_expr();
+            arg_list.append(arg) catch @panic("could not append to arg_list in parse_fn_call_expr\n");
+
+            self.putback_token(); // parse_expr consumes both ',' and ')', when ')' is consumed, putback that token
+            if(self.expect_token(.base_right_paren)) {
+                self.expect_advance_token(.base_right_paren);
+                break;
+            }
 
             self.advance_token();
-
-            const inner_expr = self.parse_expr();
-            arg_list.append(inner_expr) catch @panic("could not append to arg_list in parse_fn_call_expr\n");
         }
 
         fn_expr_ptr.* = EXPRESSIONS {
@@ -848,24 +844,8 @@ pub const Parser = struct {
                 .inner_expr_list = arg_list,
             }
         };
-        
+
         return fn_expr_ptr;
-
-    }
-
-    pub fn parse_break_expr(self: *Self) *EXPRESSIONS {
-        const break_expr_ptr = Self.default_allocator.create(EXPRESSIONS) catch @panic("Unable to allocate memory in parse_break_expr\n"); 
-        
-        self.expect_advance_token(.keyword_break);
-
-        break_expr_ptr.* = EXPRESSIONS {
-            .break_expr = .{
-                .inner_expr = self.parse_expr(),
-            }
-        };
-
-        return break_expr_ptr;
-
     }
 
     pub fn parse_return_expr(self: *Self) *EXPRESSIONS {
@@ -993,11 +973,6 @@ pub const Parser = struct {
 
             },
 
-            .keyword_break => 
-            {
-                expr_ptr = self.parse_break_expr();
-            },
-
             .keyword_return => 
             {
                 expr_ptr = self.parse_return_expr();
@@ -1016,7 +991,14 @@ pub const Parser = struct {
             },
 
             .base_add, .base_sub,
-            .base_left_shift =>
+            .base_div, .base_mul,
+            .base_exp, .base_mod,
+            .base_equal, .base_not_equal,
+            .base_lt, .base_gt,
+            .base_le, .base_ge,
+            .base_left_shift, .base_right_shift,
+            .base_bitwise_and, .base_bitwise_or,
+            .keyword_and, .keyword_or =>
             {
                 expr_ptr = self.parse_op_expr();
             },
@@ -1304,10 +1286,15 @@ pub const Parser = struct {
                                 const var_stmt = self.parse_var_update_stmt();
                                 block_elem.append(var_stmt) catch @panic("can not append to block_elem\n");
 
-                            } else { // expr ~ can not occur
-                                @panic("expr, can not occur within block_stmts\n");
-                            }
+                            } else { // expr can occur in blocks
+                                const expr_in_block = STATEMENTS {
+                                    .naked_expr = .{
+                                        .inner_expr = self.parse_expr(),
+                                    }
+                                };
 
+                                block_elem.append(expr_in_block) catch @panic("can not append to block_elem\n");
+                            }
                         } else { // update by assignment
                             self.putback_token();
                             self.putback_token();
@@ -1315,8 +1302,16 @@ pub const Parser = struct {
                             block_elem.append(var_stmt) catch @panic("can not append to block_elem\n");
                         }
 
-                    } else { // expr ~ can not occur
-                        @panic("expr, can not occur within block_stmts\n");
+                    } else { // expr can occur in blocks
+                        self.putback_token();
+
+                        const expr_in_block = STATEMENTS {
+                            .naked_expr = .{
+                                .inner_expr = self.parse_expr(),
+                            }
+                        };
+
+                        block_elem.append(expr_in_block) catch @panic("can not append to block_elem\n");
                     }
                 },
 
@@ -1341,14 +1336,26 @@ pub const Parser = struct {
                     block_elem.append(if_stmt.*) catch @panic("can not append to block_elem\n");
                 },
 
-                .base_semicolon =>
-                self.advance_token(),
+                // break is a stmt
+                .keyword_break =>
+                {
+                    self.expect_advance_token(.keyword_break); 
+                    self.expect_advance_token(.base_semicolon);
 
+                    const break_blk = STATEMENTS.break_stmt; 
+                    block_elem.append(break_blk) catch @panic("can not append to block_elem\n");
+                },
 
                 else => {
-                    print("got :: {any}\n", .{tok.kind});
-                    @panic("unacceptable stmt inside parse_block\n");
+                    const expr_in_block = STATEMENTS {
+                        .naked_expr = .{
+                            .inner_expr = self.parse_expr(),
+                        }
+                    };
+
+                    block_elem.append(expr_in_block) catch @panic("can not append to block_elem\n");
                 },
+
             }
         }
 
@@ -1373,7 +1380,7 @@ pub const Parser = struct {
             
             .base_assign, // used in update_op along with '+/-/...'
             .base_add, .base_sub,
-            .base_div, .common_mul,
+            .base_div, .base_mul,
             .base_exp, .base_mod,
             .base_equal, .base_not_equal,
             .base_lt, .base_gt,
@@ -1407,7 +1414,7 @@ pub const Parser = struct {
         return switch(operator) {
             .base_add => UPDATE_OPERATORS.ADD_EQ,
             .base_sub => UPDATE_OPERATORS.MINUS_EQ,
-            .common_mul => UPDATE_OPERATORS.MUL_EQ,
+            .base_mul => UPDATE_OPERATORS.MUL_EQ,
             .base_div => UPDATE_OPERATORS.DIV_EQ,
             .base_mod => UPDATE_OPERATORS.MOD_EQ,
             .base_exp => UPDATE_OPERATORS.EXP_EQ,
@@ -1501,6 +1508,20 @@ test {
     var parser = Parser.init_for_tests("0;");
     
     _ = parser.parse_literals();
+
+    print("{any}\n", .{parser.peek_token().kind});
+
+    print("passed..\n\n", .{});
+
+}
+
+test {
+    print("-- TEST POINTER TYPES\n", .{});
+    var parser = Parser.init_for_tests("mut ^some_struct");
+    
+    const parsed = parser.parse_type();
+
+    print("{any}\n", .{parsed});
 
     print("{any}\n", .{parser.peek_token().kind});
 
@@ -1857,6 +1878,29 @@ test {
 }
 
 test {
+    print("-- test array-access\n", .{});
+
+    var parser = Parser.init_for_tests("some[i]");
+    const arr = parser.parse_literals().array_access;
+
+    print("{any}[{any}]\n", .{arr.array_var, arr.access_index});
+
+    print("passed..\n\n", .{});
+}
+
+test {
+    print("-- test array-access\n", .{});
+
+    var parser = Parser.init_for_tests("some[i];");
+    const arr = parser.parse_expr().literal_expr;
+
+    print("{any}\n", .{arr});
+    print("{any}\n", .{parser.peek_token().kind});
+
+    print("passed..\n\n", .{});
+}
+
+test {
     print("-- TEST COMPLETE_PROGRAM\n", .{});
 
     var parser = Parser.raw_init_with_file("./file.ox");
@@ -1866,14 +1910,4 @@ test {
     print("passed..\n\n", .{});
 }
 
-test {
-    print("-- TEST array-access\n", .{});
 
-    var parser = Parser.init_for_tests("__struct.inner_list[ other_array_give_index[i] ]");
-    const arr = parser.parse_literals().array_access;
-    // _ = arr;
-
-    print("{any}[{any}]\n", .{arr.array_var, arr.access_index});
-
-    print("passed..\n\n", .{});
-}

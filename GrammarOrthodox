@@ -12,17 +12,17 @@ program    ->  [ struct-def | enum-def | function-def ]*
 
 -- block, expressions, literals ------>
 
-block       -> "{" [ ASSIGNMENT | VAR_UPDATE  | stmt ]* "}"
+block       -> "{" [ ASSIGNMENT | VAR_UPDATE  | stmt | expr ]* "}"
 
-expr        -> literals op-expr | op-expr | fn_call expr | break_expr  | return_expr  | grouped_expr | NULL
+expr        -> literals op-expr | op-expr | fn_call expr | return_expr  | grouped_expr | NULL
 
 stmt         -> if_stmt | for_stmt
 if_stmt      -> "if" expr  "{" block "}" [ "elif" expr "{" block "}"]* [ "else" "{" block "}"]
 for_stmt     -> "for" IDENTIFIER "in" expr ":" expr  "{" block "}"
+break_stmt   -> "break" 
 
 op-expr      -> OPERATOR expr
 fn_call      -> IDENTIFIER "(" [ expr ","? ]* ")"
-break_expr   -> "break" expr
 return_expr  -> "return" expr
 grouped_expr -> "(" expr ")"
 

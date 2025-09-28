@@ -62,6 +62,7 @@ pub const token_id = enum {
     type_char,
     type_string,
     type_reference, 
+    type_pointer, // ^
     type_array,
     type_maybe, 
     type_none, 
@@ -120,6 +121,7 @@ pub const token_id = enum {
     base_semicolon,
     base_dot,
     base_add,
+    base_mul,
     base_sub,
     base_div,
     base_exp, 
@@ -143,7 +145,6 @@ pub const token_id = enum {
 
     ////////// 6. COMMON-MEANING-SYMS /////// start ///
 
-    common_mul, // pointer and mul both look like '*'
     common_exclamation, // maybe and negate both look like '!'
 
     //////////// COMMON-MEANING-SYMS /////// end /////
