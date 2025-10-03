@@ -1,22 +1,21 @@
+///////////////////////////////
+//////// LEX-ERROR ////////////////////////// START /////
+///////////////////////////////
+
 const proc = @import("std").process;
-
-
-// 
-// non zero error code displays a bunch of trace which
-// we do not need
-const ERR_OCCURED = 0;
 
 //
 // C style exit without unwinding the stack like @panic
+// non-zero error code displays unnecessary traces
 pub fn exit() void {
-    proc.exit(ERR_OCCURED);
+    proc.exit(0);
 }
 
- 
 pub const LexError = error {
     MalformedNumber,
     MalformedString,
     MalformedChar,
+    EmptyChar,
     InvalidToken,
     InvalidDirective,
 };
@@ -24,7 +23,6 @@ pub const LexError = error {
 pub const LexErrorContext = struct {
     err: ?LexError,
     dump_err: ?[]const u8,
-    panic: bool,
 
     const Self = @This();
 
@@ -32,7 +30,12 @@ pub const LexErrorContext = struct {
         return Self{
             .err = null,
             .dump_err = null,
-            .panic = false,
         };
     }
 };
+
+             ///////////////////////////////////////////
+//////// END //////////////////// LEX-ERROR ////////////
+             //////////////////////////////////////////
+
+

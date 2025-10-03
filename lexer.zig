@@ -544,6 +544,8 @@ pub const StreamLexer = struct {
                 if (self.peek() != null) {
                     _ = self.advance();
                 } else break;
+            } else if(c == '\n') {
+                break;
             } else {
                 _ = self.advance();
             }
@@ -565,7 +567,9 @@ pub const StreamLexer = struct {
 
         _ = self.advance();
 
-        _ = self.peek().?;
+        const char = self.peek().?;
+        if(char == '\'') self.error_dump(LexError.EmptyChar);
+
         _ = self.advance();
 
         const c1 = self.peek().?;
@@ -588,25 +592,53 @@ pub const StreamLexer = struct {
 
     pub fn fmt_display_err_context(self: *Self) void {
         if (self.error_context.err) |err| {
-            print("\x1b[32mError :: \x1b[31m{}\x1b[0m\n", .{err});
+            print("ERROR during __lex__phase\n", .{});
 
             if (self.error_context.dump_err) |err_msg| {
-                if (self.error_context.panic) {
-                    @panic(err_msg);
-                } else {
-                    print("{s}\n", .{err_msg});
-                    errors.exit();
-                }
+                print("{s}\n", .{err_msg});
+
+                // prints error message according to LexError
+                self.fixed_err_msg(err);
+                errors.exit();
             }
         }
+    }
+
+    pub fn fixed_err_msg(self: *Self, err: errors.LexError) void {
+
+        switch(err) {
+
+            LexError.InvalidToken =>
+            print(" |-> __lex_error__type = InvalidToken(Token = {c})\n", .{self.source[self.pos]}),
+
+            LexError.MalformedNumber =>
+            print(" |-> __lex_error__type = MalformedNumber(In float-literal, after '.', no preceeding digits )\n", .{}),
+
+            LexError.MalformedString =>
+            print(" |-> __lex_error__type = MalformedString(In 'String' type, \" is not closed)\n", .{}),
+
+            LexError.MalformedChar => 
+            print(" |-> __lex_error__type = MalformedChar(In 'char' type, ' is not closed)\n", .{}),
+
+            LexError.EmptyChar => 
+            print(" |-> __lex_error__type = EmptyChar(In 'char' type, ' is not follwed by a char-literal)\n", .{}),
+
+            LexError.InvalidDirective => 
+            print(" |-> __lex_error__type = InvalidDirective(Only, a shortlist of #-type directives are possible)\n", .{}),
+
+        }
+
     }
 
     pub fn write_err_context_dump_err(self: *Self) void {
         var temp_ctx_buffer: [4096]u8 = undefined;
         self.error_context.dump_err = std.fmt.bufPrint(
             &temp_ctx_buffer,
-            "{s}:{d} :: {s}",
-            .{ self.filename orelse "", self.line, self.get_nth_line(self.line) },
+            \\ In file: {s}
+            \\ |-> Span: [{d}, {d}]
+            \\ |-> Context: .... {s} .... 
+            , .{ self.filename orelse "", self.line, self.pos, self.get_err_line() },
+
         ) catch @panic("Could not write to err_context buffer\n");
     }
 
@@ -634,27 +666,42 @@ pub const StreamLexer = struct {
         return (is_alpha(c) or is_digit(c));
     }
 
-    pub fn get_nth_line(self: *Self, n: usize) []const u8 {
-        var start_pos: usize = 0;
-        var end_pos: usize = 0;
+    //
+    // get_err_line starting from self.pos - 20 till self.pos + 20
+    pub fn get_err_line(self: *Self) []const u8 {
+        var start_pos = self.pos;
 
-        var total_lines: usize = 0;
-        while (start_pos < self.source.len) : (start_pos += 1) {
-            if (self.source[start_pos] == '\n') {
-                total_lines += 1;
-                if (total_lines == n - 1) break;
+        // start_pos should begin from 20 chars before error occured, but
+        // if previous newline begins before 20 char, or 
+        // self.pos < 20, the case is different
+        while(true) {
+            if(start_pos > 0) { start_pos -= 1; }
+            else { break; }
+
+            if(self.source[start_pos] == '\n') {
+                start_pos += 1;
+                break;
             }
+            if(start_pos == 0) break;
+            if(start_pos > 20 and start_pos <= self.pos - 20) break;
         }
 
-        total_lines = 0;
-        while (end_pos < self.source.len) : (end_pos += 1) {
-            if (self.source[end_pos] == '\n') {
-                total_lines += 1;
-                if (total_lines == n) break;
+        var end_pos = self.pos - 1;
+
+        while(true) {
+            end_pos += 1;
+
+            if(self.source[end_pos] == '\n') {
+                end_pos -= 1;
+                break;
             }
+            if(end_pos >= self.source.len) break;
+            if(end_pos >= self.pos + 20) break;
         }
 
-        return self.source[start_pos + 1 .. end_pos];
+        return self.source[start_pos .. end_pos];
+
+
     }
 
     //
@@ -713,16 +760,16 @@ pub const StreamLexer = struct {
 //// LEXER TESTS ///////// LEXER TESTS ///////// LEXER TESTS /////
 //////////////////////////////////////////////////////////////////
 
-// test "next token" {
-//     var lexer = StreamLexer.init_with_file("./example.ox");
-//
-//     while (true) {
-//         const token = lexer.next_token();
-//         if (token.kind == .base_EOF) return;
-//         print("Token-id: {}, Token-lexeme {any}, span<line_number {d}, pos {d}>\n", .{ token.kind, token.lexeme, token.span[1], token.span[0] });
-//     }
-// }
-//
+test "next token" {
+    var lexer = StreamLexer.init_with_file("./example.ox");
+
+    while (true) {
+        const token = lexer.next_token();
+        if (token.kind == .base_EOF) return;
+        print("Token-id: {}, Token-lexeme {any}, span<line_number {d}, pos {d}>\n", .{ token.kind, token.lexeme, token.span[1], token.span[0] });
+    }
+}
+
 // test "scan symbol" {
 //     var lexer = StreamLexer.raw_init("#bool", "file");
 //     const token = lexer.scan_symbol();
