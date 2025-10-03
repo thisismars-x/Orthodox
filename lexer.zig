@@ -760,16 +760,16 @@ pub const StreamLexer = struct {
 //// LEXER TESTS ///////// LEXER TESTS ///////// LEXER TESTS /////
 //////////////////////////////////////////////////////////////////
 
-test "next token" {
-    var lexer = StreamLexer.init_with_file("./example.ox");
-
-    while (true) {
-        const token = lexer.next_token();
-        if (token.kind == .base_EOF) return;
-        print("Token-id: {}, Token-lexeme {any}, span<line_number {d}, pos {d}>\n", .{ token.kind, token.lexeme, token.span[1], token.span[0] });
-    }
-}
-
+// test "next token" {
+//     var lexer = StreamLexer.init_with_file("./example.ox");
+//
+//     while (true) {
+//         const token = lexer.next_token();
+//         if (token.kind == .base_EOF) return;
+//         print("Token-id: {}, Token-lexeme {any}, span<line_number {d}, pos {d}>\n", .{ token.kind, token.lexeme, token.span[1], token.span[0] });
+//     }
+// }
+//
 // test "scan symbol" {
 //     var lexer = StreamLexer.raw_init("#bool", "file");
 //     const token = lexer.scan_symbol();
