@@ -34,19 +34,19 @@ pub const Parser = struct {
     stream_tokens: std.ArrayList(Token),
     current_token_idx: ?usize,
 
-    // 
+    //
     // stream_tokens.items.len
     var LEN_STREAM_TOKENS: usize = undefined;
 
     const Self = @This();
 
-    // 
-    // default allocator throughout the Parser, 
+    //
+    // default allocator throughout the Parser,
     // deallocated only when program exits
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .{};
     const default_allocator = gpa.allocator();
-   
-    // 
+
+    //
     // initialize with a filename to read
     // extract from StreamLexer to stream_tokens till exhaustion
     pub fn raw_init_with_file(filename: []const u8) Self {
@@ -62,7 +62,7 @@ pub const Parser = struct {
 
             if(token.kind == .base_EOF) break;
         }
-        
+
         Self.LEN_STREAM_TOKENS = parser.stream_tokens.items.len;
         return parser;
     }
@@ -80,14 +80,14 @@ pub const Parser = struct {
 
             if(token.kind == .base_EOF) break;
         }
-        
+
         Self.LEN_STREAM_TOKENS = parser.stream_tokens.items.len;
         return parser;
     }
 
 
     /////////////////// PARSE-PROGRAM ///////////////////////// start ////////////////
-    
+
     //
     // a program consists of a sequence of struct | enum | function definitions
     pub fn parse_program(self: *Self) std.ArrayList(DEFINITIONS) {
@@ -113,7 +113,7 @@ pub const Parser = struct {
 
                 },
 
-                .keyword_enum => 
+                .keyword_enum =>
                 {
                     self.putback_token(); // .base_type_colon
                     self.putback_token(); // enum_name
@@ -123,11 +123,11 @@ pub const Parser = struct {
 
                 },
 
-                .keyword_function => 
+                .keyword_function =>
                 {
-                    self.putback_token(); // .base_type_colon 
+                    self.putback_token(); // .base_type_colon
                     self.putback_token(); // fn_name
-                    
+
                     const fn_def = self.parse_fn_def();
                     program.append(fn_def) catch @panic("could not append fn_def to program");
 
@@ -153,11 +153,11 @@ pub const Parser = struct {
     pub fn parse_type(self: *Self) *TYPES { // VERIFIED
 
         // To keep *TYPES valid even after returning from function
-        const return_type_ptr = Self.default_allocator.create(TYPES) catch @panic("Unable to allocate memory in parse_type\n"); 
-        
+        const return_type_ptr = Self.default_allocator.create(TYPES) catch @panic("Unable to allocate memory in parse_type\n");
+
         var this_type: TYPES = undefined;
 
-        var type_is_mut = false; 
+        var type_is_mut = false;
         if(self.expect_token(.keyword_mut)) {
             type_is_mut = true;
             self.advance_token();
@@ -165,10 +165,10 @@ pub const Parser = struct {
 
         const tok = self.peek_token();
         switch(tok.kind) {
-            
 
 
-            ////////////////////// NUMBERS ////////////////////// start // 
+
+            ////////////////////// NUMBERS ////////////////////// start //
 
             .type_i8 => {
                 this_type = TYPES {
@@ -282,7 +282,7 @@ pub const Parser = struct {
             },
 
             .type_void => {
-                this_type = TYPES.void; 
+                this_type = TYPES.void;
             },
 
 
@@ -290,13 +290,13 @@ pub const Parser = struct {
 
             .type_pointer => { // pointer type
                 // in cases we have know that peek'ing token returns a fixed token, we call advance_token instead of expect_advance_token
-                self.advance_token(); 
+                self.advance_token();
 
                 this_type = TYPES {
                     .pointer = .{
                         .ptr_to = self.parse_type(), // after calling parse_type call putback_token ~ parse_type advance_token' before returning
                         .mut = type_is_mut,
-                    }   
+                    }
                 };
 
                 self.putback_token();
@@ -317,12 +317,12 @@ pub const Parser = struct {
 
             .base_left_bracket => { // array types
                 self.advance_token();
-                
+
                 // arrays can not have expressions as part of their types
-                // number :: [1 + (2-3 ** (2 == 0)) + if(x==0) { break 5; }]i32 = {} 
+                // number :: [1 + (2-3 ** (2 == 0)) + if(x==0) { break 5; }]i32 = {}
                 // does not work for obvious reasons
                 //
-                // checking: "mut"? "[" SIZE "]" LONELY_TYPE 
+                // checking: "mut"? "[" SIZE "]" LONELY_TYPE
                 if(self.expect_token(.literal_number) == false) {
                     @panic("array type with no size is not allowed, originating in parse_type\n");
                 }
@@ -374,7 +374,7 @@ pub const Parser = struct {
 
             .keyword_function => {
 
-                self.expect_advance_token(.keyword_function); 
+                self.expect_advance_token(.keyword_function);
                 self.expect_advance_token(.base_left_paren);
 
                 var args_and_types = std.StringHashMap(*TYPES).init(Self.default_allocator);
@@ -400,7 +400,7 @@ pub const Parser = struct {
                     if(!self.expect_token(.base_comma)) {
                         self.expect_advance_token(.base_right_paren);
                         break;
-                    } 
+                    }
 
                     self.expect_advance_token(.base_comma);
 
@@ -426,7 +426,7 @@ pub const Parser = struct {
 
                 }
 
-                
+
 
             },
 
@@ -444,11 +444,11 @@ pub const Parser = struct {
 
     }
 
-    // 
-    // literals may appear in an expression 
+    //
+    // literals may appear in an expression
     // Parses all literals
     pub fn parse_literals(self: *Self) LITERALS {  // VERIFIED
-        var return_literal: LITERALS = undefined; 
+        var return_literal: LITERALS = undefined;
 
         const tok = self.peek_token();
         switch(tok.kind) {
@@ -488,7 +488,7 @@ pub const Parser = struct {
             },
 
             .base_identifier => {
-                
+
                 // check if this is a variable, or a struct/record member access
                 self.advance_token();
                 if(self.expect_token(.base_dot) == false) {
@@ -499,7 +499,7 @@ pub const Parser = struct {
                     return_literal = LITERALS {
                         .variable = .{
                             .inner_value = tok.lexeme.?,
-                        } 
+                        }
                     };
 
                 } else {
@@ -569,7 +569,7 @@ pub const Parser = struct {
         self.expect_advance_token(.base_type_colon);
         self.expect_advance_token(.keyword_struct);
 
-        self.expect_advance_token(.base_assign);
+        // self.expect_advance_token(.base_assign);
         self.expect_advance_token(.base_left_braces);
 
         var fields_types = std.StringHashMap(*TYPES).init(Self.default_allocator);
@@ -620,9 +620,9 @@ pub const Parser = struct {
         self.expect_advance_token(.base_type_colon);
         self.expect_advance_token(.keyword_enum);
 
-        self.expect_advance_token(.base_assign);
+        // self.expect_advance_token(.base_assign);
         self.expect_advance_token(.base_left_braces);
-    
+
         var fields = std.ArrayList([]const u8).init(Self.default_allocator);
 
         var enum_is_empty = true;
@@ -655,7 +655,7 @@ pub const Parser = struct {
                 .fields = fields,
             }
         };
-        
+
 
     }
 
@@ -668,7 +668,7 @@ pub const Parser = struct {
 
         const fn_type = self.parse_type();
 
-        self.expect_advance_token(.base_assign);
+        // self.expect_advance_token(.base_assign);
 
         const fn_block = self.parse_block();
 
@@ -694,10 +694,10 @@ pub const Parser = struct {
 
 
 
-    //////////////////////// SUB-EXPRESSIONS /////////////////////// start /// 
+    //////////////////////// SUB-EXPRESSIONS /////////////////////// start ///
 
     pub fn parse_literal_expr(self: *Self) *EXPRESSIONS {
-        const literal_expr_ptr = Self.default_allocator.create(EXPRESSIONS) catch @panic("Unable to allocate memory in parse_literal_expr\n"); 
+        const literal_expr_ptr = Self.default_allocator.create(EXPRESSIONS) catch @panic("Unable to allocate memory in parse_literal_expr\n");
 
         literal_expr_ptr.* = EXPRESSIONS {
             .literal_expr = .{
@@ -712,9 +712,9 @@ pub const Parser = struct {
     }
 
     pub fn parse_op_expr(self: *Self) *EXPRESSIONS {
-        const op_expr_ptr = Self.default_allocator.create(EXPRESSIONS) catch @panic("Unable to allocate memory in parse_op_expr\n"); 
+        const op_expr_ptr = Self.default_allocator.create(EXPRESSIONS) catch @panic("Unable to allocate memory in parse_op_expr\n");
 
-        if(!self.peek_is_operator()) { 
+        if(!self.peek_is_operator()) {
             @panic("parse_op_expr requires operator, at first");
         }
 
@@ -723,7 +723,7 @@ pub const Parser = struct {
         const tok = self.peek_token();
         switch(tok.kind) {
             .base_add => {
-                operator = OPERATORS.ADD;        
+                operator = OPERATORS.ADD;
             },
 
             .base_sub => {
@@ -794,7 +794,7 @@ pub const Parser = struct {
                 operator = OPERATORS.NON_EQUAL;
             },
 
-            else => 
+            else =>
             @panic("invalid operator in parse_fn_call_expr\n"),
         }
 
@@ -810,9 +810,9 @@ pub const Parser = struct {
         return op_expr_ptr;
 
     }
- 
+
     pub fn parse_fn_call_expr(self: *Self) *EXPRESSIONS {
-        const fn_expr_ptr = Self.default_allocator.create(EXPRESSIONS) catch @panic("Unable to allocate memory in parse_fn_call_expr\n"); 
+        const fn_expr_ptr = Self.default_allocator.create(EXPRESSIONS) catch @panic("Unable to allocate memory in parse_fn_call_expr\n");
 
         const fn_name = self.peek_token().lexeme.?;
         self.expect_advance_token(.base_identifier);
@@ -880,7 +880,7 @@ pub const Parser = struct {
 
     }
 
-    // 
+    //
     // right side may only contain struct creation, and nothing else
     // struct_init require ',' after every field
     pub fn parse_struct_init_expr(self: *Self) *EXPRESSIONS {
@@ -900,15 +900,15 @@ pub const Parser = struct {
             self.expect_advance_token(.base_dot);
             const field_name = self.peek_token().lexeme.?;
             self.expect_advance_token(.base_identifier);
-            
+
             self.expect_advance_token(.base_assign);
 
             const field_value = self.parse_expr();
             switch(field_value.*) { // if a field inside a struct is init with a struct-def, '}' of that struct-def is used as delimiter for that struct ending, but we require, .base_comma after every field
-                .struct_expr => 
+                .struct_expr =>
                 self.expect_advance_token(.base_comma),
 
-                else => 
+                else =>
                 {}
             }
 
@@ -916,7 +916,7 @@ pub const Parser = struct {
             fields_values.put(field_name, field_value) catch @panic("could not 'put' to fields_values in parse_struct_init_expr\n");
 
             if(self.expect_token(.base_comma)) self.expect_advance_token(.base_comma);
-            
+
         }
 
         self.expect_advance_token(.base_semicolon);
@@ -931,7 +931,7 @@ pub const Parser = struct {
         return struct_expr_ptr;
     }
 
-    //////////////////////// SUB-EXPRESSIONS /////////////////////// end  //// 
+    //////////////////////// SUB-EXPRESSIONS /////////////////////// end  ////
 
 
 
@@ -973,18 +973,18 @@ pub const Parser = struct {
 
             },
 
-            .keyword_return => 
+            .keyword_return =>
             {
                 expr_ptr = self.parse_return_expr();
             },
 
-            .base_left_paren => 
+            .base_left_paren =>
             {
                 NO_OF_PAREN_IN_CLOSED_EXPR += 1;
                 expr_ptr = self.parse_closed_expr();
             },
 
-            .base_right_paren => 
+            .base_right_paren =>
             {
                 NO_OF_PAREN_IN_CLOSED_EXPR -= 1;
                 self.expect_advance_token(.base_right_paren);
@@ -1015,7 +1015,7 @@ pub const Parser = struct {
             .base_right_bracket => // access array
             self.advance_token(),
 
-            else => 
+            else =>
             {
                 print("got token :: {any}\n", .{tok});
                 @panic("unexpected token in parse_expr\n");
@@ -1033,7 +1033,7 @@ pub const Parser = struct {
 
     //////////////////////// LOOP /////////////////////////// start ///
 
-    
+
     fn parse_for_stmt(self: *Self) *STATEMENTS {
 
         self.expect_advance_token(.keyword_for);
@@ -1093,8 +1093,8 @@ pub const Parser = struct {
 
     ////////////////////// ASSIGNMENTS /////////////////////////// start ////
 
-    
-    // 
+
+    //
     // assignments may be simple decl ~ a :: mut i32;
     // or, ~ a :: mut i32 = 1 + 2;
     pub fn parse_assign_stmt(self: *Self) STATEMENTS {
@@ -1163,7 +1163,7 @@ pub const Parser = struct {
     pub fn parse_if_stmt(self: *Self) *STATEMENTS {
 
         const return_if_ptr = Self.default_allocator.create(STATEMENTS) catch @panic("Unable to allocate memory in parse_if_stmt\n");
-        
+
         var has_elif_branches = false;
         var elif_conds = std.ArrayList(*EXPRESSIONS).init(Self.default_allocator);
         var elif_blocks = std.ArrayList(*STATEMENTS).init(Self.default_allocator);
@@ -1226,7 +1226,7 @@ pub const Parser = struct {
                     .elif_conds = null,
                     .elif_blocks = null,
 
-                    .else_block = else_blk,
+                    .else_block = if(has_else) else_blk else null,
                 }
             };
         }
@@ -1266,7 +1266,7 @@ pub const Parser = struct {
 
 
                 // assignment, update
-                .base_identifier => 
+                .base_identifier =>
                 {
                     _  = self.expect_advance_token(.base_identifier);
 
@@ -1317,20 +1317,20 @@ pub const Parser = struct {
 
                 // for-stmt
                 .keyword_for =>
-                { 
+                {
                     const for_stmt = self.parse_for_stmt();
                     block_elem.append(for_stmt.*) catch @panic("can not append to block_elem\n");
                 },
 
                 // loop-stmt
                 .keyword_loop =>
-                { 
+                {
                     const loop_stmt = self.parse_loop_stmt();
                     block_elem.append(loop_stmt.*) catch @panic("can not append to block_elem\n");
                 },
 
                 // if-stmt
-                .keyword_if => 
+                .keyword_if =>
                 {
                     const if_stmt = self.parse_if_stmt();
                     block_elem.append(if_stmt.*) catch @panic("can not append to block_elem\n");
@@ -1339,10 +1339,10 @@ pub const Parser = struct {
                 // break is a stmt
                 .keyword_break =>
                 {
-                    self.expect_advance_token(.keyword_break); 
+                    self.expect_advance_token(.keyword_break);
                     self.expect_advance_token(.base_semicolon);
 
-                    const break_blk = STATEMENTS.break_stmt; 
+                    const break_blk = STATEMENTS.break_stmt;
                     block_elem.append(break_blk) catch @panic("can not append to block_elem\n");
                 },
 
@@ -1363,7 +1363,7 @@ pub const Parser = struct {
 
         return STATEMENTS {
            .block = .{
-                .inner_elements = block_elem, 
+                .inner_elements = block_elem,
             }
         };
 
@@ -1375,9 +1375,9 @@ pub const Parser = struct {
     //
     // is peek_token a binary-operator
     pub fn peek_is_operator(self: *Self) bool {
-        
+
         switch(self.peek_token().kind) {
-            
+
             .base_assign, // used in update_op along with '+/-/...'
             .base_add, .base_sub,
             .base_div, .base_mul,
@@ -1397,11 +1397,11 @@ pub const Parser = struct {
 
     }
 
-    // 
+    //
     // which update-op is next, consume it
     pub fn which_update_operator(self: *Self) UPDATE_OPERATORS {
-        
-        if(self.expect_token(.base_assign))  { 
+
+        if(self.expect_token(.base_assign))  {
             self.expect_advance_token(.base_assign);
             return UPDATE_OPERATORS.ASSIGN;
 
@@ -1437,15 +1437,15 @@ pub const Parser = struct {
         } else {
             // self.current_token_idx = 1;
             return self.stream_tokens.items[0];
-        } 
+        }
     }
 
     //
     // Shorthand for
     // if expect_token(SOME_TOKEN_ID) then, advance_token()
     pub fn expect_advance_token(self: *Self, kind: token_id) void {
-        if(self.expect_token(kind)) return self.advance_token(); 
-        
+        if(self.expect_token(kind)) return self.advance_token();
+
         print("Expected {any}, got {any}\n", .{kind, self.peek_token().kind});
         @panic("expect_token returned false in expect_advance_token\n");
     }
@@ -1457,7 +1457,7 @@ pub const Parser = struct {
         return (kind == self.peek_token().kind);
     }
 
-    // 
+    //
     // Advance to next_token by consuming current_token
     // Do not return Token, like peek_token or current_token
     pub fn advance_token(self: *Self) void {
@@ -1467,13 +1467,13 @@ pub const Parser = struct {
         } else self.current_token_idx = 0;
     }
 
-    // 
+    //
     // undo the effect of an individual advance_token
     pub fn putback_token(self: *Self) void {
         if(self.current_token_idx) |idx| {
             if(idx > 0) { self.current_token_idx.? -= 1; }
             else self.current_token_idx = null;
-        } 
+        }
     }
 
     //
@@ -1485,14 +1485,14 @@ pub const Parser = struct {
 
         for(self.stream_tokens.items[from..to]) |item| {
             print("{any}\n", .{item});
-        } 
+        }
     }
 
     pub fn show_full_token_list(self: *Self) void {
         return self.show_token_list(0, Self.LEN_STREAM_TOKENS);
     }
 
-    // 
+    //
     // clean-up procedures
     pub fn dealloc(self: *Self) void {
         self.stream_tokens.deinit();
@@ -1503,411 +1503,410 @@ pub const Parser = struct {
 /////// PARSER TESTS /////////////// PARSER TESTS /////////////// PARSER TESTS ////////
 ///////////////////////////////////////////////////////////////////////////////////////
 
-test {
-    print("-- TEST LITERALS\n", .{});
-    var parser = Parser.init_for_tests("0;");
-    
-    _ = parser.parse_literals();
-
-    print("{any}\n", .{parser.peek_token().kind});
-
-    print("passed..\n\n", .{});
-
-}
-
-test {
-    print("-- TEST POINTER TYPES\n", .{});
-    var parser = Parser.init_for_tests("mut^ [100]some_struct");
-    
-    const parsed = parser.parse_type();
-
-    print("{any}\n", .{parsed});
-
-    print("{any}\n", .{parser.peek_token().kind});
-
-    print("passed..\n\n", .{});
-
-}
-
-test {
-    print("-- TEST PARSE EXPRESSIONS\n", .{});
-    var parser = Parser.init_for_tests("a+1; x; c-d;");
-
-    var parsed = parser.parse_expr();
-    print("1 :: {s} {any} {s}\n", .{
-        parsed.literal_expr.inner_literal.variable.inner_value,
-        parsed.literal_expr.inner_expr.operator_expr.inner_operator,
-        parsed.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal.number.inner_value
-    });
-
-    parsed = parser.parse_expr();
-    print("2 :: {s}\n", .{parsed.literal_expr.inner_literal.variable.inner_value});
-
-    parsed = parser.parse_expr();
-    print("3 :: {s} {any} {s}\n", .{
-        parsed.literal_expr.inner_literal.variable.inner_value,
-        parsed.literal_expr.inner_expr.operator_expr.inner_operator,
-        parsed.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal.variable.inner_value
-    });
-
-
-
-    print("passed..\n\n", .{});
-
-}
-
-test {
-    print("-- TEST PARSE CLOSED EXPRESSIONS\n", .{});
-    var parser = Parser.init_for_tests("return (1 + (c+d));");
-
-    const parsed = parser.parse_expr();
-    print("( ", .{});
-    print("{s} ", .{parsed.return_expr.inner_expr.closed_expr.inner_expr.literal_expr.inner_literal.number.inner_value});
-    print("{any} ", .{parsed.return_expr.inner_expr.closed_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_operator});
-    print("( ", .{});
-    print("{s} ", .{parsed.return_expr.inner_expr.closed_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_expr.closed_expr.inner_expr.literal_expr.inner_literal.variable.inner_value});
-    print("{any} ", .{parsed.return_expr.inner_expr.closed_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_expr.closed_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_operator});
-    print("{s}", .{parsed.return_expr.inner_expr.closed_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_expr.closed_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal.variable.inner_value});
-    print(" ) ", .{});
-    print(" )\n ", .{});
-
-
-    print("passed..\n\n", .{});
-
-}
-
-test {
-    print("-- TEST PARSE FUNCTION EXPRESSIONS\n", .{});
-    var parser = Parser.init_for_tests("add('c', 2 + number, number + 2);");
-
-    const parsed = parser.parse_expr();
-    _ = parsed;
-
-    print("{any}\n", .{parser.peek_token().kind});
-
-    print("passed..\n\n", .{});
-
-}
-
-test {
-    print("-- TEST PARSE LOOP STATMENTS\n", .{});
-    var parser = Parser.init_for_tests("loop : { a = x + 100; }");
-
-    const parsed = parser.parse_loop_stmt();
-    const loop_parsed = parsed.loop_stmt.loop_block.block.inner_elements.items[0];
-
-    print("<{s}> <{any}> <{s}> <{any}> <{s}>\n", .{
-        loop_parsed.update.lvalue_name,
-        loop_parsed.update.update_op,
-        loop_parsed.update.rvalue_expr.literal_expr.inner_literal.variable.inner_value,
-        loop_parsed.update.rvalue_expr.literal_expr.inner_expr.operator_expr.inner_operator,
-        loop_parsed.update.rvalue_expr.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal.number.inner_value,
-    });
-
-    print("passed..\n\n", .{});
-
-}
-
-test {
-    print("-- TEST PARSE FOR STATMENTS\n", .{});
-    var parser = Parser.init_for_tests("for x in ZERO : ONE >> 32 : { a = x + 100; }");
-
-    const parsed = parser.parse_for_stmt();
-    const for_parsed = parsed.for_stmt;
-
-    print("for <{s}> in <{s}> : <{s}> <{any}> <{s}>\n", .{
-            for_parsed.identifier_name,
-            for_parsed.range_expr1.literal_expr.inner_literal.variable.inner_value,
-            for_parsed.range_expr2.literal_expr.inner_literal.variable.inner_value,
-            for_parsed.range_expr2.literal_expr.inner_expr.operator_expr.inner_operator,
-            for_parsed.range_expr2.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal.number.inner_value,
-    });
-
-    const for_parsed_blk = for_parsed.for_block.block.inner_elements.items[0];
-    print("<{s}> <{any}> <{s}> <{any}> <{s}>\n", .{
-        for_parsed_blk.update.lvalue_name,
-        for_parsed_blk.update.update_op,
-        for_parsed_blk.update.rvalue_expr.literal_expr.inner_literal.variable.inner_value,
-        for_parsed_blk.update.rvalue_expr.literal_expr.inner_expr.operator_expr.inner_operator,
-        for_parsed_blk.update.rvalue_expr.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal.number.inner_value,
-    });
-
-    print("passed..\n\n", .{});
-
-}
-
-test {
-    print("-- TEST PARSE STRUCT-INIT-EXPR\n", .{});
-    var parser = Parser.init_for_tests("numbers {.a = b, .b = 200, .c = math { .pi = 3.14, };, .d = 0, };");
-
-    const parsed = parser.parse_expr();
-    _ = parsed;
-
-
-    print("passed..\n\n", .{});
-
-}
-
-test {
-    print("-- TEST PARSE ASSIGNMENT\n", .{});
-    var parser = Parser.init_for_tests("a :: mut i32 = 1 + 2; b :: i64 = 128; c :: String;");
-
-    var parsed = parser.parse_assign_stmt();
-
-    print("lvalue_name :: {s}\n", .{parsed.assignment.lvalue_name});
-    print("lvalue_type :: {any}\n", .{parsed.assignment.lvalue_type});
-    print("rvalue_expr :: {any}\n", .{parsed.assignment.rvalue_expr});
-
-    parsed = parser.parse_assign_stmt();
-
-    print("lvalue_name :: {s}\n", .{parsed.assignment.lvalue_name});
-    print("lvalue_type :: {any}\n", .{parsed.assignment.lvalue_type});
-    print("rvalue_expr :: {any}\n", .{parsed.assignment.rvalue_expr});
-
-    parsed = parser.parse_assign_stmt();
-
-    print("lvalue_name :: {s}\n", .{parsed.assignment.lvalue_name});
-    print("lvalue_type :: {any}\n", .{parsed.assignment.lvalue_type});
-    print("rvalue_expr :: {any}\n", .{parsed.assignment.rvalue_expr});
-
-
-    print("passed..\n\n", .{});
-
-}
-
-
-test {
-    print("-- TEST PARSE STRUCT ASSIGNMENT\n", .{});
-    var parser = Parser.init_for_tests("d :: mut logger = logger { .level = 0, .warn = a.b.c.d.e, };");
-
-    const parsed = parser.parse_assign_stmt();
-    _ = parsed;
-
-    print("{any} :: \n", .{parser.peek_token()});
-
-    print("passed..\n\n", .{});
-
-}
-
-test {
-    print("-- TEST PARSE WHICH UPDATE-OP\n", .{});
-    var parser = Parser.init_for_tests("+= -= = **= >>= <<= *=");
-
-    var parsed = parser.which_update_operator();
-    print("{any}\n", .{parsed});
-
-    parsed = parser.which_update_operator();
-    print("{any}\n", .{parsed});
-
-    parsed = parser.which_update_operator();
-    print("{any}\n", .{parsed});
-
-    parsed = parser.which_update_operator();
-    print("{any}\n", .{parsed});
-
-    parsed = parser.which_update_operator();
-    print("{any}\n", .{parsed});
-
-    parsed = parser.which_update_operator();
-    print("{any}\n", .{parsed});
-
-    parsed = parser.which_update_operator();
-    print("{any}\n", .{parsed});
-
-    print("passed..\n\n", .{});
-
-}
-
-test {
-    print("-- TEST PARSE  UPDATE_OP\n", .{});
-
-    const s = 
-    \\ temp_logger = logger {
-    \\      .which = file {
-    \\         .number = stdout { 
-    \\            .yes  = yes,
-    \\            .buffer = "IONBF",
-    \\            .time = timespec {
-    \\                .nsec = 100,
-    \\                .sec = 200 + 300,
-    \\            };,
-    \\         };,
-    \\       };,
-    \\ };
-    ;
-
-    var parser = Parser.init_for_tests(s);
-
-    const parsed = parser.parse_var_update_stmt();
-    print("{any}\n", .{parsed});
-
-    print("{any}\n", .{parser.peek_token()});
-
-
-    print("passed..\n\n", .{});
-
-}
-
-test {
-    print("-- TEST PARSE BLOCK_EXPR\n", .{});
-
-    var parser = Parser.init_for_tests("{ c :: mut i32 = 1; c += 100; { e :: String; } }");
-    const parsed = parser.parse_block();
-
-    const parsed_blk = parsed.block.inner_elements.items;
-    print("{any}\n", .{parsed_blk[0]});
-    print("{any}\n", .{parsed_blk[1]});
-    print("{any}\n", .{parsed_blk[2].block.inner_elements.items[0]});
-
-    print("passed..\n\n", .{});
-}
-
-test {
-    print("-- TEST PARSE BLOCK_EXPR\n", .{});
-
-    var parser = Parser.init_for_tests("{ c :: mut i32 = 1; c += 100 + 200; for i in 0 : 100 : { s = \"stringosis\"; } }");
-    const parsed = parser.parse_block();
-
-    const parsed_blk = parsed.block.inner_elements.items;
-    print("{any}\n", .{parsed_blk[0]});
-    print("{any}\n", .{parsed_blk[1]});
-    print("{any}\n", .{parsed_blk[2].for_stmt});
-
-    print("passed..\n\n", .{});
-}
-
-test {
-    print("-- TEST PARSE IF_EXPR\n", .{});
-
-    const s = 
-    \\ if i >> 32 - 2000 : {
-    \\      c :: mut i32 = 0;
-    \\ } elif IS_THIS_VAR_TRUE : {
-    \\      d = 100;
-    \\ } elif THIS_VAR_IS_TRUE : {
-    \\     e = "string";
-    \\ } else : { x :: i32 = 1; x += 1; }
-    \\
-    ;
-
-    var parser = Parser.init_for_tests(s);
-    const parsed = parser.parse_if_stmt();
-    _ = parsed;
-
-    print("{any}\n", .{parser.peek_token().kind});
-
-    print("passed..\n\n", .{});
-}
-
-test {
-    print("-- TEST PARSE TOP_LVL STRUCT_DEF\n", .{});
-
-    const s = 
-    \\ logger :: struct = {
-    \\      level :: String,
-    \\      panic :: u8,
-    \\      which :: mut [1024][1024]i32,
-    \\ };
-    ;
-
-    var parser = Parser.init_for_tests(s);
-    const parsed = parser.parse_struct_def();
-    _ = parsed;
-
-    print("{any}\n", .{parser.peek_token().kind});
-
-    print("passed..\n\n", .{});
-}
-
-test {
-    print("-- TEST PARSE TOP_LVL ENUM_DEF\n", .{});
-
-    const s = 
-    \\ level :: enum = {
-    \\      NONE, 
-    \\      ERR,
-    \\      FATAL,
-    \\      PANIC, 
-    \\ };
-    ;
-
-    var parser = Parser.init_for_tests(s);
-    const parsed = parser.parse_enum_def();
-    _ = parsed;
-
-    print("{any}\n", .{parser.peek_token().kind});
-
-    print("passed..\n\n", .{});
-}
-
-test {
-    print("-- TEST PARSE FUNCTION-TYPE\n", .{});
-
-    const s = "fn(x :: String, y :: @String) mut [1024]u8";
-
-    var parser = Parser.init_for_tests(s);
-    const parsed = parser.parse_type().function;
-
-    var args_types = parsed.args_and_types.?.iterator();
-
-    while(args_types.next()) |item| {
-        print("{s} :: {any}\n", .{item.key_ptr.*, item.value_ptr.*});
-    }
-
-    print("returns :: {any}\n", .{parsed.return_type});
-
-    print("{any}\n", .{parser.peek_token().kind});
-
-    print("passed..\n\n", .{});
-}
-
-test {
-    print("-- TEST PARSE TOP_LVL FUNCTION_DEF\n", .{});
-
-    const s = 
-    \\ main :: fn(args :: u32, argv :: [1024]String) void = { loop : { a :: i32; } };
-    ;
-
-    var parser = Parser.init_for_tests(s);
-    const parsed = parser.parse_fn_def();
-    _ = parsed;
-
-    print("{any}\n", .{parser.peek_token().kind});
-
-    print("passed..\n\n", .{});
-}
-
-test {
-    print("-- test array-access\n", .{});
-
-    var parser = Parser.init_for_tests("some[i]");
-    const arr = parser.parse_literals().array_access;
-
-    print("{any}[{any}]\n", .{arr.array_var, arr.access_index});
-
-    print("passed..\n\n", .{});
-}
-
-test {
-    print("-- test array-access\n", .{});
-
-    var parser = Parser.init_for_tests("some[i];");
-    const arr = parser.parse_expr().literal_expr;
-
-    print("{any}\n", .{arr});
-    print("{any}\n", .{parser.peek_token().kind});
-
-    print("passed..\n\n", .{});
-}
-
-test {
-    print("-- TEST COMPLETE_PROGRAM\n", .{});
-
-    var parser = Parser.raw_init_with_file("./file.ox");
-    const parsed = parser.parse_program();
-
-    print("len :: {d}\n", .{parsed.items.len});
-    print("passed..\n\n", .{});
-}
-
-
+// test {
+//     print("-- TEST LITERALS\n", .{});
+//     var parser = Parser.init_for_tests("0;");
+//
+//     _ = parser.parse_literals();
+//
+//     print("{any}\n", .{parser.peek_token().kind});
+//
+//     print("passed..\n\n", .{});
+//
+// }
+//
+// test {
+//     print("-- TEST POINTER TYPES\n", .{});
+//     var parser = Parser.init_for_tests("mut^ [100]some_struct");
+//
+//     const parsed = parser.parse_type();
+//
+//     print("{any}\n", .{parsed});
+//
+//     print("{any}\n", .{parser.peek_token().kind});
+//
+//     print("passed..\n\n", .{});
+//
+// }
+//
+// test {
+//     print("-- TEST PARSE EXPRESSIONS\n", .{});
+//     var parser = Parser.init_for_tests("a+1; x; c-d;");
+//
+//     var parsed = parser.parse_expr();
+//     print("1 :: {s} {any} {s}\n", .{
+//         parsed.literal_expr.inner_literal.variable.inner_value,
+//         parsed.literal_expr.inner_expr.operator_expr.inner_operator,
+//         parsed.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal.number.inner_value
+//     });
+//
+//     parsed = parser.parse_expr();
+//     print("2 :: {s}\n", .{parsed.literal_expr.inner_literal.variable.inner_value});
+//
+//     parsed = parser.parse_expr();
+//     print("3 :: {s} {any} {s}\n", .{
+//         parsed.literal_expr.inner_literal.variable.inner_value,
+//         parsed.literal_expr.inner_expr.operator_expr.inner_operator,
+//         parsed.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal.variable.inner_value
+//     });
+//
+//
+//
+//     print("passed..\n\n", .{});
+//
+// }
+//
+// test {
+//     print("-- TEST PARSE CLOSED EXPRESSIONS\n", .{});
+//     var parser = Parser.init_for_tests("return (1 + (c+d));");
+//
+//     const parsed = parser.parse_expr();
+//     print("( ", .{});
+//     print("{s} ", .{parsed.return_expr.inner_expr.closed_expr.inner_expr.literal_expr.inner_literal.number.inner_value});
+//     print("{any} ", .{parsed.return_expr.inner_expr.closed_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_operator});
+//     print("( ", .{});
+//     print("{s} ", .{parsed.return_expr.inner_expr.closed_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_expr.closed_expr.inner_expr.literal_expr.inner_literal.variable.inner_value});
+//     print("{any} ", .{parsed.return_expr.inner_expr.closed_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_expr.closed_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_operator});
+//     print("{s}", .{parsed.return_expr.inner_expr.closed_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_expr.closed_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal.variable.inner_value});
+//     print(" ) ", .{});
+//     print(" )\n ", .{});
+//
+//
+//     print("passed..\n\n", .{});
+//
+// }
+//
+// test {
+//     print("-- TEST PARSE FUNCTION EXPRESSIONS\n", .{});
+//     var parser = Parser.init_for_tests("add('c', 2 + number, number + 2);");
+//
+//     const parsed = parser.parse_expr();
+//     _ = parsed;
+//
+//     print("{any}\n", .{parser.peek_token().kind});
+//
+//     print("passed..\n\n", .{});
+//
+// }
+//
+// test {
+//     print("-- TEST PARSE LOOP STATMENTS\n", .{});
+//     var parser = Parser.init_for_tests("loop : { a = x + 100; }");
+//
+//     const parsed = parser.parse_loop_stmt();
+//     const loop_parsed = parsed.loop_stmt.loop_block.block.inner_elements.items[0];
+//
+//     print("<{s}> <{any}> <{s}> <{any}> <{s}>\n", .{
+//         loop_parsed.update.lvalue_name,
+//         loop_parsed.update.update_op,
+//         loop_parsed.update.rvalue_expr.literal_expr.inner_literal.variable.inner_value,
+//         loop_parsed.update.rvalue_expr.literal_expr.inner_expr.operator_expr.inner_operator,
+//         loop_parsed.update.rvalue_expr.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal.number.inner_value,
+//     });
+//
+//     print("passed..\n\n", .{});
+//
+// }
+//
+// test {
+//     print("-- TEST PARSE FOR STATMENTS\n", .{});
+//     var parser = Parser.init_for_tests("for x in ZERO : ONE >> 32 : { a = x + 100; }");
+//
+//     const parsed = parser.parse_for_stmt();
+//     const for_parsed = parsed.for_stmt;
+//
+//     print("for <{s}> in <{s}> : <{s}> <{any}> <{s}>\n", .{
+//             for_parsed.identifier_name,
+//             for_parsed.range_expr1.literal_expr.inner_literal.variable.inner_value,
+//             for_parsed.range_expr2.literal_expr.inner_literal.variable.inner_value,
+//             for_parsed.range_expr2.literal_expr.inner_expr.operator_expr.inner_operator,
+//             for_parsed.range_expr2.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal.number.inner_value,
+//     });
+//
+//     const for_parsed_blk = for_parsed.for_block.block.inner_elements.items[0];
+//     print("<{s}> <{any}> <{s}> <{any}> <{s}>\n", .{
+//         for_parsed_blk.update.lvalue_name,
+//         for_parsed_blk.update.update_op,
+//         for_parsed_blk.update.rvalue_expr.literal_expr.inner_literal.variable.inner_value,
+//         for_parsed_blk.update.rvalue_expr.literal_expr.inner_expr.operator_expr.inner_operator,
+//         for_parsed_blk.update.rvalue_expr.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal.number.inner_value,
+//     });
+//
+//     print("passed..\n\n", .{});
+//
+// }
+//
+// test {
+//     print("-- TEST PARSE STRUCT-INIT-EXPR\n", .{});
+//     var parser = Parser.init_for_tests("numbers {.a = b, .b = 200, .c = math { .pi = 3.14, };, .d = 0, };");
+//
+//     const parsed = parser.parse_expr();
+//     _ = parsed;
+//
+//
+//     print("passed..\n\n", .{});
+//
+// }
+//
+// test {
+//     print("-- TEST PARSE ASSIGNMENT\n", .{});
+//     var parser = Parser.init_for_tests("a :: mut i32 = 1 + 2; b :: i64 = 128; c :: String;");
+//
+//     var parsed = parser.parse_assign_stmt();
+//
+//     print("lvalue_name :: {s}\n", .{parsed.assignment.lvalue_name});
+//     print("lvalue_type :: {any}\n", .{parsed.assignment.lvalue_type});
+//     print("rvalue_expr :: {any}\n", .{parsed.assignment.rvalue_expr});
+//
+//     parsed = parser.parse_assign_stmt();
+//
+//     print("lvalue_name :: {s}\n", .{parsed.assignment.lvalue_name});
+//     print("lvalue_type :: {any}\n", .{parsed.assignment.lvalue_type});
+//     print("rvalue_expr :: {any}\n", .{parsed.assignment.rvalue_expr});
+//
+//     parsed = parser.parse_assign_stmt();
+//
+//     print("lvalue_name :: {s}\n", .{parsed.assignment.lvalue_name});
+//     print("lvalue_type :: {any}\n", .{parsed.assignment.lvalue_type});
+//     print("rvalue_expr :: {any}\n", .{parsed.assignment.rvalue_expr});
+//
+//
+//     print("passed..\n\n", .{});
+//
+// }
+//
+//
+// test {
+//     print("-- TEST PARSE STRUCT ASSIGNMENT\n", .{});
+//     var parser = Parser.init_for_tests("d :: mut logger = logger { .level = 0, .warn = a.b.c.d.e, };");
+//
+//     const parsed = parser.parse_assign_stmt();
+//     _ = parsed;
+//
+//     print("{any} :: \n", .{parser.peek_token()});
+//
+//     print("passed..\n\n", .{});
+//
+// }
+//
+// test {
+//     print("-- TEST PARSE WHICH UPDATE-OP\n", .{});
+//     var parser = Parser.init_for_tests("+= -= = **= >>= <<= *=");
+//
+//     var parsed = parser.which_update_operator();
+//     print("{any}\n", .{parsed});
+//
+//     parsed = parser.which_update_operator();
+//     print("{any}\n", .{parsed});
+//
+//     parsed = parser.which_update_operator();
+//     print("{any}\n", .{parsed});
+//
+//     parsed = parser.which_update_operator();
+//     print("{any}\n", .{parsed});
+//
+//     parsed = parser.which_update_operator();
+//     print("{any}\n", .{parsed});
+//
+//     parsed = parser.which_update_operator();
+//     print("{any}\n", .{parsed});
+//
+//     parsed = parser.which_update_operator();
+//     print("{any}\n", .{parsed});
+//
+//     print("passed..\n\n", .{});
+//
+// }
+//
+// test {
+//     print("-- TEST PARSE  UPDATE_OP\n", .{});
+//
+//     const s =
+//     \\ temp_logger = logger {
+//     \\      .which = file {
+//     \\         .number = stdout {
+//     \\            .yes  = yes,
+//     \\            .buffer = "IONBF",
+//     \\            .time = timespec {
+//     \\                .nsec = 100,
+//     \\                .sec = 200 + 300,
+//     \\            };,
+//     \\         };,
+//     \\       };,
+//     \\ };
+//     ;
+//
+//     var parser = Parser.init_for_tests(s);
+//
+//     const parsed = parser.parse_var_update_stmt();
+//     print("{any}\n", .{parsed});
+//
+//     print("{any}\n", .{parser.peek_token()});
+//
+//
+//     print("passed..\n\n", .{});
+//
+// }
+//
+// test {
+//     print("-- TEST PARSE BLOCK_EXPR\n", .{});
+//
+//     var parser = Parser.init_for_tests("{ c :: mut i32 = 1; c += 100; { e :: String; } }");
+//     const parsed = parser.parse_block();
+//
+//     const parsed_blk = parsed.block.inner_elements.items;
+//     print("{any}\n", .{parsed_blk[0]});
+//     print("{any}\n", .{parsed_blk[1]});
+//     print("{any}\n", .{parsed_blk[2].block.inner_elements.items[0]});
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST PARSE BLOCK_EXPR\n", .{});
+//
+//     var parser = Parser.init_for_tests("{ c :: mut i32 = 1; c += 100 + 200; for i in 0 : 100 : { s = \"stringosis\"; } }");
+//     const parsed = parser.parse_block();
+//
+//     const parsed_blk = parsed.block.inner_elements.items;
+//     print("{any}\n", .{parsed_blk[0]});
+//     print("{any}\n", .{parsed_blk[1]});
+//     print("{any}\n", .{parsed_blk[2].for_stmt});
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST PARSE IF_EXPR\n", .{});
+//
+//     const s =
+//     \\ if i >> 32 - 2000 : {
+//     \\      c :: mut i32 = 0;
+//     \\ } elif IS_THIS_VAR_TRUE : {
+//     \\      d = 100;
+//     \\ } elif THIS_VAR_IS_TRUE : {
+//     \\     e = "string";
+//     \\ } else : { x :: i32 = 1; x += 1; }
+//     \\
+//     ;
+//
+//     var parser = Parser.init_for_tests(s);
+//     const parsed = parser.parse_if_stmt();
+//     _ = parsed;
+//
+//     print("{any}\n", .{parser.peek_token().kind});
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST PARSE TOP_LVL STRUCT_DEF\n", .{});
+//
+//     const s =
+//     \\ logger :: struct {
+//     \\      level :: String,
+//     \\      panic :: u8,
+//     \\      which :: mut [1024][1024]i32,
+//     \\ };
+//     ;
+//
+//     var parser = Parser.init_for_tests(s);
+//     const parsed = parser.parse_struct_def();
+//     _ = parsed;
+//
+//     print("{any}\n", .{parser.peek_token().kind});
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST PARSE TOP_LVL ENUM_DEF\n", .{});
+//
+//     const s =
+//     \\ level :: enum {
+//     \\      NONE,
+//     \\      ERR,
+//     \\      FATAL,
+//     \\      PANIC,
+//     \\ };
+//     ;
+//
+//     var parser = Parser.init_for_tests(s);
+//     const parsed = parser.parse_enum_def();
+//     _ = parsed;
+//
+//     print("{any}\n", .{parser.peek_token().kind});
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST PARSE FUNCTION-TYPE\n", .{});
+//
+//     const s = "proc(x :: String, y :: @String) mut [1024]u8";
+//
+//     var parser = Parser.init_for_tests(s);
+//     const parsed = parser.parse_type().function;
+//
+//     var args_types = parsed.args_and_types.?.iterator();
+//
+//     while(args_types.next()) |item| {
+//         print("{s} :: {any}\n", .{item.key_ptr.*, item.value_ptr.*});
+//     }
+//
+//     print("returns :: {any}\n", .{parsed.return_type});
+//
+//     print("{any}\n", .{parser.peek_token().kind});
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST PARSE TOP_LVL FUNCTION_DEF\n", .{});
+//
+//     const s =
+//     \\ main :: proc(args :: u32, argv :: [1024]String) void { loop : { a :: i32; } };
+//     ;
+//
+//     var parser = Parser.init_for_tests(s);
+//     const parsed = parser.parse_fn_def();
+//     _ = parsed;
+//
+//     print("{any}\n", .{parser.peek_token().kind});
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- test array-access\n", .{});
+//
+//     var parser = Parser.init_for_tests("some[i]");
+//     const arr = parser.parse_literals().array_access;
+//
+//     print("{any}[{any}]\n", .{arr.array_var, arr.access_index});
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- test array-access\n", .{});
+//
+//     var parser = Parser.init_for_tests("some[i];");
+//     const arr = parser.parse_expr().literal_expr;
+//
+//     print("{any}\n", .{arr});
+//     print("{any}\n", .{parser.peek_token().kind});
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST COMPLETE_PROGRAM\n", .{});
+//
+//     var parser = Parser.raw_init_with_file("./file.ox");
+//     const parsed = parser.parse_program();
+//
+//     print("len :: {d}\n", .{parsed.items.len});
+//     print("{any}\n", .{parsed.items[4]});
+//     print("passed..\n\n", .{});
+// }

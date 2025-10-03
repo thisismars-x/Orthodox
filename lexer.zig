@@ -200,7 +200,7 @@ pub const StreamLexer = struct {
         } else if (std.mem.eql(u8, lexeme, "while")) {
             token.kind = .keyword_while;
             token.lexeme = null;
-        } else if (std.mem.eql(u8, lexeme, "fn")) {
+        } else if (std.mem.eql(u8, lexeme, "proc")) {
             token.kind = .keyword_function;
             token.lexeme = null;
         } else if (std.mem.eql(u8, lexeme, "and")) {

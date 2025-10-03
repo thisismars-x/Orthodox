@@ -53,7 +53,7 @@ pub const TYPES = union(enum) {
 
     function: struct { 
         args_and_types: ?std.StringHashMap(*TYPES),
-        return_type: *TYPES, // void-types are optional
+        return_type: *TYPES, 
     },
 };
 
@@ -220,7 +220,7 @@ pub const LITERALS = union(enum) {
     },
 
     variable: struct {
-        inner_value: []const u8, // name of variable
+    inner_value: []const u8, // name of variable
     },
 
     member_access: struct { // member access for record-types(enums and structs)
