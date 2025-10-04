@@ -525,63 +525,63 @@ pub fn create_var_mapping_for_vars(assignment: STATEMENTS, scope: SCOPE, block_l
 //     print("passed..\n\n", .{});
 // }
 //
-// test {
-//     print("-- TEST CREATE_SYM_TABLE_FOR_FUNCTION_DEFS\n", .{});
-//
-//     const fn_def = 
-//     \\ main :: proc(argc :: u32, args :: String) void 
-//     \\ {
-//     \\      x :: mut i32 = 100;
-//     \\      x += 1;
-//     \\     
-//     \\      y :: String = "this is going to be a string";
-//     \\
-//     \\      z :: mut [1024]char;
-//     \\      print("print something", a, b, c);
-//     \\
-//     \\      {
-//     \\          p :: i32 = 4; 
-//     \\          z :: char = 'p';
-//     \\         
-//     \\
-//     \\          for i in a : b : {
-//     \\              number :: f64 = 213e+100;
-//     \\              
-//     \\              for j in c : d : { another_number :: mut i32; }
-//     \\              { more_numbers :: f128; }
-//     \\          }
-//     \\
-//     \\     }
-//     \\
-//     \\ };
-//     ;
-//
-//     var parser = Parser.init_for_tests(fn_def);
-//     const parsed = parser.parse_fn_def();
-//
-//     const fn_mapping = create_fn_mapping_for_fn_defs(parsed);
-//     print("fn_name :: {s}\n", .{fn_mapping.fn_name});
-//
-//     const fn_type = fn_mapping.fn_type.function;
-//     var fn_args_types = fn_type.args_and_types.?.iterator();
-//
-//     while(fn_args_types.next()) |kv| {
-//         print("{s} :: {any}\n", .{kv.key_ptr.*, kv.value_ptr.*});
-//     }
-//
-//     print("return-type :: {any}\n", .{fn_type.return_type});
-//
-//     const assign_var_mapping = fn_mapping.fn_sym_stack;
-//
-//     for(assign_var_mapping.items) |block_item| {
-//         print("var_name  :: {s}\n", .{block_item.variable_name});
-//         print("var_scope :: {any}\n", .{block_item.variable_scope});
-//         print("var_scope :: {any}\n", .{block_item.variable_block_scope_level});
-//         print("var_type  :: {any}\n\n", .{block_item.variable_type});
-//     }
-//
-//     print("passed..\n\n", .{});
-// }
+test {
+    print("-- TEST CREATE_SYM_TABLE_FOR_FUNCTION_DEFS\n", .{});
+
+    const fn_def = 
+    \\ main :: proc(argc :: u32, args :: String) void 
+    \\ {
+    \\      x :: mut i32 = 100;
+    \\      x += 1;
+    \\     
+    \\      y :: String = "this is going to be a string";
+    \\
+    \\      z :: mut [1024]char;
+    \\      print("print something", a, b, c);
+    \\
+    \\      {
+    \\          p :: i32 = 4; 
+    \\          z :: char = 'p';
+    \\         
+    \\
+    \\          for i in a : b : {
+    \\              number :: f64 = 213e+100;
+    \\              
+    \\              for j in c : d : { another_number :: mut i32; }
+    \\              { more_numbers :: f128; }
+    \\          }
+    \\
+    \\     }
+    \\
+    \\ };
+    ;
+
+    var parser = Parser.init_for_tests(fn_def);
+    const parsed = parser.parse_fn_def();
+
+    const fn_mapping = create_fn_mapping_for_fn_defs(parsed);
+    print("fn_name :: {s}\n", .{fn_mapping.fn_name});
+
+    const fn_type = fn_mapping.fn_type.function;
+    var fn_args_types = fn_type.args_and_types.?.iterator();
+
+    while(fn_args_types.next()) |kv| {
+        print("{s} :: {any}\n", .{kv.key_ptr.*, kv.value_ptr.*});
+    }
+
+    print("return-type :: {any}\n", .{fn_type.return_type});
+
+    const assign_var_mapping = fn_mapping.fn_sym_stack;
+
+    for(assign_var_mapping.items) |block_item| {
+        print("var_name  :: {s}\n", .{block_item.variable_name});
+        print("var_scope :: {any}\n", .{block_item.variable_scope});
+        print("var_scope :: {any}\n", .{block_item.variable_block_scope_level});
+        print("var_type  :: {any}\n\n", .{block_item.variable_type});
+    }
+
+    print("passed..\n\n", .{});
+}
 //
 // test {
 //     print("-- TEST CREATE_SYMBOL_TABLE\n", .{});
