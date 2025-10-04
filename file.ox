@@ -16,9 +16,9 @@ main :: proc(argc :: u32, args :: [64]String) void {
   loop : {
     a += 1;
 
-    if a + 200 : {
-      break;
-    }
+//    if a + 200 : {
+//      break;
+//    }
   }
 
   scoped_logger :: logger = logger {
@@ -29,9 +29,10 @@ main :: proc(argc :: u32, args :: [64]String) void {
 
 };
 
-print_array_of_strings :: proc(list :: [128]strings) void {
+print_array_of_strings :: proc() void {
 
   for i in 0 : 128 : {
+    x :: mut i64;
     break;
   }
 

@@ -9,7 +9,9 @@ const std = @import("std");
 // All types in ORthodox
 pub const TYPES = union(enum) {
 
-    void, 
+    void: struct {
+        mut: bool,
+    },
 
     number: struct {
         focused_type: []const u8, // u8? i64? f32?
@@ -220,7 +222,7 @@ pub const LITERALS = union(enum) {
     },
 
     variable: struct {
-    inner_value: []const u8, // name of variable
+        inner_value: []const u8, // name of variable
     },
 
     member_access: struct { // member access for record-types(enums and structs)

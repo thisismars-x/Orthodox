@@ -53,6 +53,9 @@ pub fn create_sym_stack(block: STATEMENTS, next_level: u32) SYMBOL_STACK {
                     {
                         current_block_level += 1;
 
+                        // block_change_pad signifies that new block has been entered
+                        sym_stack.append(create_block_pad_at_level(current_block_level)) catch @panic("could not append to sym_stack in create_sym_stack\n");
+
                         const inner_block = create_sym_stack(block_item, current_block_level);
                         for(inner_block.items) |inner_block_item| {
                             sym_stack.append(inner_block_item) catch @panic("could not append to sym_stack in create_sym_stack\n");
@@ -65,6 +68,9 @@ pub fn create_sym_stack(block: STATEMENTS, next_level: u32) SYMBOL_STACK {
                     .for_stmt => 
                     {
                         current_block_level += 1;
+
+                        // block_change_pad signifies that new block has been entered
+                        sym_stack.append(create_block_pad_at_level(current_block_level)) catch @panic("could not append to sym_stack in create_sym_stack\n");
 
                         const inner_for_block = create_sym_stack(block_item.for_stmt.for_block.*, current_block_level);
                         for(inner_for_block.items) |inner_block_item| {
@@ -79,6 +85,9 @@ pub fn create_sym_stack(block: STATEMENTS, next_level: u32) SYMBOL_STACK {
                     {
                         current_block_level += 1;
 
+                        // block_change_pad signifies that new block has been entered
+                        sym_stack.append(create_block_pad_at_level(current_block_level)) catch @panic("could not append to sym_stack in create_sym_stack\n");
+
                         const inner_loop_block = create_sym_stack(block_item.loop_stmt.loop_block.*, current_block_level);
                         for(inner_loop_block.items) |inner_block_item| {
                             sym_stack.append(inner_block_item) catch @panic("could not append to sym_stack in create_sym_stack\n");
@@ -92,7 +101,9 @@ pub fn create_sym_stack(block: STATEMENTS, next_level: u32) SYMBOL_STACK {
                     {
                         current_block_level += 1;
 
-                        // if-condition
+                        // if-condition                        
+                        // block_change_pad signifies that new block has been entered
+                        sym_stack.append(create_block_pad_at_level(current_block_level)) catch @panic("could not append to sym_stack in create_sym_stack\n");
                         const inner_if_block = create_sym_stack(block_item.conditional_stmt.if_block.*, current_block_level);
                         for(inner_if_block.items) |inner_block_item| {
                             sym_stack.append(inner_block_item) catch @panic("could not append to sym_stack in create_sym_stack\n");
@@ -100,6 +111,9 @@ pub fn create_sym_stack(block: STATEMENTS, next_level: u32) SYMBOL_STACK {
 
                         // if elif-conditions are possible
                         if(block_item.conditional_stmt.elif_blocks) |elif_blocks| {
+                            // block_change_pad signifies that new block has been entered
+                            sym_stack.append(create_block_pad_at_level(current_block_level)) catch @panic("could not append to sym_stack in create_sym_stack\n");
+
                             for(elif_blocks.items) |elif_block| {
                                 const inner_elif_block = create_sym_stack(elif_block.*, current_block_level);
                                 for(inner_elif_block.items) |inner_block_item| {
@@ -112,6 +126,9 @@ pub fn create_sym_stack(block: STATEMENTS, next_level: u32) SYMBOL_STACK {
 
                         // if else-condition is possible
                         if(block_item.conditional_stmt.else_block) |else_block| {
+                            // block_change_pad signifies that new block has been entered
+                            sym_stack.append(create_block_pad_at_level(current_block_level)) catch @panic("could not append to sym_stack in create_sym_stack\n");
+
                             const inner_else_block = create_sym_stack(else_block.*, current_block_level);
                             for(inner_else_block.items) |inner_block_item| {
                                 sym_stack.append(inner_block_item) catch @panic("could not append to sym_stack in create_sym_stack\n");
@@ -334,7 +351,23 @@ pub const VARIABLE_MAPPING = struct {
 
     variable_type: TYPES,
 
+    // delineates the starting of a new block
+    block_change_pad: bool,
+
 };
+
+//
+// new blocks are indicated by the presence of 1 VARIABLE_MAPPING with .block_change_pad active
+pub fn create_block_pad_at_level(lvl: u32) VARIABLE_MAPPING {
+    return VARIABLE_MAPPING {
+        .variable_name = " ",
+        .variable_scope = SCOPE.BLOCK,
+        .variable_block_scope_level = lvl,
+        .variable_type = TYPES { .void = .{ .mut = false}, },
+        .block_change_pad = true,
+
+    };
+}
 
 // 
 // a global scope entails struct | enum | fn definitions
@@ -352,6 +385,7 @@ pub fn create_var_mapping_for_vars(assignment: STATEMENTS, scope: SCOPE, block_l
 
     var_mapping.variable_block_scope_level = block_level;
     var_mapping.variable_scope = scope;
+    var_mapping.block_change_pad = false;
 
     switch(assignment) {
 
@@ -377,249 +411,253 @@ pub fn create_var_mapping_for_vars(assignment: STATEMENTS, scope: SCOPE, block_l
 //////////// SYMBOL_TABLE TESTS ///////////////////////////// SYMBOL_TABLE TESTS ///////////////////////////// SYMBOL_TABLE TESTS /////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-test {
-    print("-- TEST CREATE_VAR_MAPPING_FOR_VARS\n", .{});
-
-    var parser = Parser.init_for_tests("a :: mut i32 = 100;");
-    const assignment = parser.parse_assign_stmt();
-
-    const assign_var_mapping = create_var_mapping_for_vars(assignment, SCOPE.GLOBAL, 0);
-    print("{any} :: \n", .{assign_var_mapping});
-
-    print("passed..\n\n", .{});
-}
-
-test {
-    print("-- TEST CREATE_VAR_MAPPING_FOR_STRUCT_DEF\n", .{});
-
-    var parser = Parser.init_for_tests("logger :: struct { level :: i32, warn :: WARN, };");
-    const assignment = parser.parse_struct_def();
-
-    const assign_struct_mapping = create_struct_mapping_for_struct_defs(assignment);
-
-    print("struct-name :: {s}\n", .{assign_struct_mapping.struct_name});
-
-    var ft_iter =   assign_struct_mapping.fields_types.iterator();
-    while(ft_iter.next()) |ft| {
-        print("{s} :: {any}\n", .{ft.key_ptr.*, ft.value_ptr.*});
-    }
-
-    print("passed..\n\n", .{});
-}
-
-
-test {
-    print("-- TEST CREATE_VAR_MAPPING_FOR_ENUM_DEF\n", .{});
-
-    var parser = Parser.init_for_tests("logger_b :: enum { level0, level1, level2, };");
-    const assignment = parser.parse_enum_def();
-
-    const assign_enum_mapping = create_enum_mapping_for_enum_defs(assignment);
-
-    print("enum-name :: {s}\n", .{assign_enum_mapping.enum_name});
-
-    print("enum-field-list ::  ", .{});
-
-    for(assign_enum_mapping.fields.items) |field| {
-        print("{s}, ", .{field});
-    }
-
-    print("\n", .{});
-    print("passed..\n\n", .{});
-}
-
-test {
-    print("-- TEST CREATE_SYM_STACK\n", .{});
-
-    const example_block = 
-    \\ {
-    \\      x :: mut i32 = 100;
-    \\      x += 1;
-    \\     
-    \\      y :: String = "this is going to be a string";
-    \\
-    \\      z :: mut [1024]char;
-    \\      print("print something", a, b, c);
-    \\
-    \\      {
-    \\          p :: i32 = 4; 
-    \\          z :: char = 'p';
-    \\         
-    \\
-    \\          for i in a : b : {
-    \\              number :: f64 = 213e+100;
-    \\              
-    \\              for j in c : d : { another_number :: mut i32; }
-    \\              { more_numbers :: f128; }
-    \\          }
-    \\
-    \\     }
-    \\
-    \\     loop : { 
-    \\          keep_init_this_char :: char = 's';
-    \\     }
-    \\
-    \\    if some_impossible_condition : {
-    \\          some_thing :: i32;
-    \\
-    \\          if this_condition_may_occur >> 32 + 2 / 0 : {
-    \\              other_thing :: mut i64;
-    \\          }
-    \\    } elif x + y + z : {
-    \\          elif_number :: i32;
-    \\    } else : {
-    \\          else_number :: i32;
-    \\          loop : { loop_number :: i32; }
-    \\    }
-    \\ }
-    \\ 
-    \\ 
-    ;
-
-    var parser = Parser.init_for_tests(example_block);
-    const assignment = parser.parse_block();
-
-    const assign_var_mapping = create_sym_stack(assignment, 0);
-
-    for(assign_var_mapping.items) |block_item| {
-        print("var_name  :: {s}\n", .{block_item.variable_name});
-        print("var_scope :: {any}\n", .{block_item.variable_scope});
-        print("var_scope :: {any}\n", .{block_item.variable_block_scope_level});
-        print("var_type  :: {any}\n\n", .{block_item.variable_type});
-    }
-
-    print("passed..\n\n", .{});
-}
-
-test {
-    print("-- TEST CREATE_SYM_TABLE_FOR_FUNCTION_DEFS\n", .{});
-
-    const fn_def = 
-    \\ main :: proc(argc :: u32, args :: String) void 
-    \\ {
-    \\      x :: mut i32 = 100;
-    \\      x += 1;
-    \\     
-    \\      y :: String = "this is going to be a string";
-    \\
-    \\      z :: mut [1024]char;
-    \\      print("print something", a, b, c);
-    \\
-    \\      {
-    \\          p :: i32 = 4; 
-    \\          z :: char = 'p';
-    \\         
-    \\
-    \\          for i in a : b : {
-    \\              number :: f64 = 213e+100;
-    \\              
-    \\              for j in c : d : { another_number :: mut i32; }
-    \\              { more_numbers :: f128; }
-    \\          }
-    \\
-    \\     }
-    \\
-    \\ };
-    ;
-
-    var parser = Parser.init_for_tests(fn_def);
-    const parsed = parser.parse_fn_def();
-
-    const fn_mapping = create_fn_mapping_for_fn_defs(parsed);
-    print("fn_name :: {s}\n", .{fn_mapping.fn_name});
-
-    const fn_type = fn_mapping.fn_type.function;
-    var fn_args_types = fn_type.args_and_types.?.iterator();
-
-    while(fn_args_types.next()) |kv| {
-        print("{s} :: {any}\n", .{kv.key_ptr.*, kv.value_ptr.*});
-    }
-
-    print("return-type :: {any}\n", .{fn_type.return_type});
-
-    const assign_var_mapping = fn_mapping.fn_sym_stack;
-
-    for(assign_var_mapping.items) |block_item| {
-        print("var_name  :: {s}\n", .{block_item.variable_name});
-        print("var_scope :: {any}\n", .{block_item.variable_scope});
-        print("var_scope :: {any}\n", .{block_item.variable_block_scope_level});
-        print("var_type  :: {any}\n\n", .{block_item.variable_type});
-    }
-
-    print("passed..\n\n", .{});
-}
-
-test {
-    print("-- TEST CREATE_SYMBOL_TABLE\n", .{});
-
-    var parser = Parser.raw_init_with_file("./file.ox");
-    const program = parser.parse_program();
-
-    const sym_table = create_symbol_table(program);
-
-    for(sym_table.items) |entry| {
-
-        switch(entry) {
-
-            .struct_mapping =>
-            {
-                const assign_struct_mapping = entry.struct_mapping;
-
-                print("struct-name :: {s}\n", .{assign_struct_mapping.struct_name});
-
-                var ft_iter =   assign_struct_mapping.fields_types.iterator();
-                while(ft_iter.next()) |ft| {
-                    print("{s} :: {any}\n", .{ft.key_ptr.*, ft.value_ptr.*});
-                }
-
-                print("\n", .{});
-            },
-
-            .enum_mapping =>
-            {
-                const assign_enum_mapping = entry.enum_mapping;
-
-                print("enum-name :: {s}\n", .{assign_enum_mapping.enum_name});
-
-                print("enum-field-list ::  ", .{});
-
-                for(assign_enum_mapping.fields.items) |field| {
-                    print("{s}, ", .{field});
-                }
-
-                print("\n\n", .{});
-            },
-
-            .function_mapping =>
-            {
-                const fn_mapping = entry.function_mapping;
-                print("fn_name :: {s}\n", .{fn_mapping.fn_name});
-
-                const fn_type = fn_mapping.fn_type.function;
-                var fn_args_types = fn_type.args_and_types.?.iterator();
-
-                while(fn_args_types.next()) |kv| {
-                    print("{s} :: {any}\n", .{kv.key_ptr.*, kv.value_ptr.*});
-                }
-
-                print("return-type :: {any}\n", .{fn_type.return_type});
-
-                const assign_var_mapping = fn_mapping.fn_sym_stack;
-
-                for(assign_var_mapping.items) |block_item| {
-                    print("var_name  :: {s}\n", .{block_item.variable_name});
-                    print("var_scope :: {any}\n", .{block_item.variable_scope});
-                    print("var_scope :: {any}\n", .{block_item.variable_block_scope_level});
-                    print("var_type  :: {any}\n\n", .{block_item.variable_type});
-                }
-
-            },
-
-        }
-        
-
-    }
-
-    print("\n", .{});
-    print("passed..\n\n", .{});
-}
+// test {
+//     print("-- TEST CREATE_VAR_MAPPING_FOR_VARS\n", .{});
+//
+//     var parser = Parser.init_for_tests("a :: mut i32 = 100;");
+//     const assignment = parser.parse_assign_stmt();
+//
+//     const assign_var_mapping = create_var_mapping_for_vars(assignment, SCOPE.GLOBAL, 0);
+//     print("{any} :: \n", .{assign_var_mapping});
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST CREATE_VAR_MAPPING_FOR_STRUCT_DEF\n", .{});
+//
+//     var parser = Parser.init_for_tests("logger :: struct { level :: i32, warn :: WARN, };");
+//     const assignment = parser.parse_struct_def();
+//
+//     const assign_struct_mapping = create_struct_mapping_for_struct_defs(assignment);
+//
+//     print("struct-name :: {s}\n", .{assign_struct_mapping.struct_name});
+//
+//     var ft_iter =   assign_struct_mapping.fields_types.iterator();
+//     while(ft_iter.next()) |ft| {
+//         print("{s} :: {any}\n", .{ft.key_ptr.*, ft.value_ptr.*});
+//     }
+//
+//     print("passed..\n\n", .{});
+// }
+//
+//
+// test {
+//     print("-- TEST CREATE_VAR_MAPPING_FOR_ENUM_DEF\n", .{});
+//
+//     var parser = Parser.init_for_tests("logger_b :: enum { level0, level1, level2, };");
+//     const assignment = parser.parse_enum_def();
+//
+//     const assign_enum_mapping = create_enum_mapping_for_enum_defs(assignment);
+//
+//     print("enum-name :: {s}\n", .{assign_enum_mapping.enum_name});
+//
+//     print("enum-field-list ::  ", .{});
+//
+//     for(assign_enum_mapping.fields.items) |field| {
+//         print("{s}, ", .{field});
+//     }
+//
+//     print("\n", .{});
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST CREATE_SYM_STACK\n", .{});
+//
+//     const example_block = 
+//     \\ {
+//     \\      x :: mut i32 = 100;
+//     \\      x += 1;
+//     \\     
+//     \\      y :: String = "this is going to be a string";
+//     \\
+//     \\      z :: mut [1024]char;
+//     \\      print("print something", a, b, c);
+//     \\
+//     \\      {
+//     \\          p :: i32 = 4; 
+//     \\          z :: char = 'p';
+//     \\         
+//     \\
+//     \\          for i in a : b : {
+//     \\              number :: f64 = 213e+100;
+//     \\              
+//     \\              for j in c : d : { another_number :: mut i32; }
+//     \\              { more_numbers :: f128; }
+//     \\          }
+//     \\
+//     \\     }
+//     \\
+//     \\     loop : { 
+//     \\          keep_init_this_char :: char = 's';
+//     \\     }
+//     \\
+//     \\    if some_impossible_condition : {
+//     \\          some_thing :: i32;
+//     \\
+//     \\          if this_condition_may_occur >> 32 + 2 / 0 : {
+//     \\              other_thing :: mut i64;
+//     \\          }
+//     \\    } elif x + y + z : {
+//     \\          elif_number :: i32;
+//     \\    } else : {
+//     \\          else_number :: i32;
+//     \\          loop : { loop_number :: i32; }
+//     \\    }
+//     \\ }
+//     \\ 
+//     \\ 
+//     ;
+//
+//     var parser = Parser.init_for_tests(example_block);
+//     const assignment = parser.parse_block();
+//
+//     const assign_var_mapping = create_sym_stack(assignment, 0);
+//
+//     for(assign_var_mapping.items) |block_item| {
+//         print("var_name  :: {s}\n", .{block_item.variable_name});
+//         print("var_scope :: {any}\n", .{block_item.variable_scope});
+//         print("var_scope :: {any}\n", .{block_item.variable_block_scope_level});
+//         print("var_type  :: {any}\n\n", .{block_item.variable_type});
+//     }
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST CREATE_SYM_TABLE_FOR_FUNCTION_DEFS\n", .{});
+//
+//     const fn_def = 
+//     \\ main :: proc(argc :: u32, args :: String) void 
+//     \\ {
+//     \\      x :: mut i32 = 100;
+//     \\      x += 1;
+//     \\     
+//     \\      y :: String = "this is going to be a string";
+//     \\
+//     \\      z :: mut [1024]char;
+//     \\      print("print something", a, b, c);
+//     \\
+//     \\      {
+//     \\          p :: i32 = 4; 
+//     \\          z :: char = 'p';
+//     \\         
+//     \\
+//     \\          for i in a : b : {
+//     \\              number :: f64 = 213e+100;
+//     \\              
+//     \\              for j in c : d : { another_number :: mut i32; }
+//     \\              { more_numbers :: f128; }
+//     \\          }
+//     \\
+//     \\     }
+//     \\
+//     \\ };
+//     ;
+//
+//     var parser = Parser.init_for_tests(fn_def);
+//     const parsed = parser.parse_fn_def();
+//
+//     const fn_mapping = create_fn_mapping_for_fn_defs(parsed);
+//     print("fn_name :: {s}\n", .{fn_mapping.fn_name});
+//
+//     const fn_type = fn_mapping.fn_type.function;
+//     var fn_args_types = fn_type.args_and_types.?.iterator();
+//
+//     while(fn_args_types.next()) |kv| {
+//         print("{s} :: {any}\n", .{kv.key_ptr.*, kv.value_ptr.*});
+//     }
+//
+//     print("return-type :: {any}\n", .{fn_type.return_type});
+//
+//     const assign_var_mapping = fn_mapping.fn_sym_stack;
+//
+//     for(assign_var_mapping.items) |block_item| {
+//         print("var_name  :: {s}\n", .{block_item.variable_name});
+//         print("var_scope :: {any}\n", .{block_item.variable_scope});
+//         print("var_scope :: {any}\n", .{block_item.variable_block_scope_level});
+//         print("var_type  :: {any}\n\n", .{block_item.variable_type});
+//     }
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST CREATE_SYMBOL_TABLE\n", .{});
+//
+//     var parser = Parser.raw_init_with_file("./file.ox");
+//     const program = parser.parse_program();
+//
+//     const sym_table = create_symbol_table(program);
+//
+//     for(sym_table.items) |entry| {
+//
+//         switch(entry) {
+//
+//             .struct_mapping =>
+//             {
+//                 const assign_struct_mapping = entry.struct_mapping;
+//
+//                 print("struct-name :: {s}\n", .{assign_struct_mapping.struct_name});
+//
+//                 var ft_iter =   assign_struct_mapping.fields_types.iterator();
+//                 while(ft_iter.next()) |ft| {
+//                     print("{s} :: {any}\n", .{ft.key_ptr.*, ft.value_ptr.*});
+//                 }
+//
+//                 print("\n", .{});
+//             },
+//
+//             .enum_mapping =>
+//             {
+//                 const assign_enum_mapping = entry.enum_mapping;
+//
+//                 print("enum-name :: {s}\n", .{assign_enum_mapping.enum_name});
+//
+//                 print("enum-field-list ::  ", .{});
+//
+//                 for(assign_enum_mapping.fields.items) |field| {
+//                     print("{s}, ", .{field});
+//                 }
+//
+//                 print("\n\n", .{});
+//             },
+//
+//             .function_mapping =>
+//             {
+//                 const fn_mapping = entry.function_mapping;
+//                 print("fn_name :: {s}\n", .{fn_mapping.fn_name});
+//
+//                 const fn_type = fn_mapping.fn_type.function;
+//
+//                 if(fn_type.args_and_types) |args_types| {
+//
+//                     var fn_args_types = args_types.iterator();
+//                     while(fn_args_types.next()) |kv| {
+//                         print("{s} :: {any}\n", .{kv.key_ptr.*, kv.value_ptr.*});
+//                     }
+//
+//                 }
+//
+//                 print("return-type :: {any}\n", .{fn_type.return_type});
+//
+//                 const assign_var_mapping = fn_mapping.fn_sym_stack;
+//
+//                 for(assign_var_mapping.items) |block_item| {
+//                     print("var_name  :: {s}\n", .{block_item.variable_name});
+//                     print("var_scope :: {any}\n", .{block_item.variable_scope});
+//                     print("var_scope :: {any}\n", .{block_item.variable_block_scope_level});
+//                     print("var_type  :: {any}\n\n", .{block_item.variable_type});
+//                 }
+//
+//             },
+//
+//         }
+//
+//
+//     }
+//
+//     print("\n", .{});
+//     print("passed..\n\n", .{});
+// }

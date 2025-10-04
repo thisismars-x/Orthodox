@@ -282,7 +282,11 @@ pub const Parser = struct {
             },
 
             .type_void => {
-                this_type = TYPES.void;
+                this_type = TYPES {
+                    .void = .{
+                        .mut = type_is_mut,
+                    }
+                };
             },
 
 
