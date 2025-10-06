@@ -37,11 +37,10 @@ pub const TYPES = union(enum) {
     },
 
     // 
-    // all arrays need to be sized,
-    // number_array:: []i32 = {1, 2, 3} will not work
+    // number_array:: []i32 = {1, 2, 3} will work
     // number_array:: [512]i32 = {1, 2, 3} will work
     array: struct {
-        len: []const u8,
+        len: ?[]const u8,
         lonely_type: *TYPES, // lonely_type of [1024]i32 is i32
         mut: bool,
     },
@@ -104,10 +103,6 @@ pub const EXPRESSIONS = union(enum) {
     return_expr: struct {
         inner_expr: *EXPRESSIONS,
     },
-
-    // break_expr: struct {
-    //     inner_expr: *EXPRESSIONS,
-    // },
 
     closed_expr: struct {
         inner_expr: *EXPRESSIONS,
@@ -229,6 +224,10 @@ pub const LITERALS = union(enum) {
     member_access: struct { // member access for record-types(enums and structs)
         record_type_name: []const u8,
         members_name_in_order: std.ArrayList([]const u8),
+    },
+
+    pointer_deref: struct {
+        deref_literal: *LITERALS, // but may not be number, string, char
     },
 
     // array access are only allowed to one-level

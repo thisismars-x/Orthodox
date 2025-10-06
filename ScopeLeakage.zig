@@ -157,8 +157,9 @@ pub fn check_expr_against_symbol_table(expr: EXPRESSIONS, symbol_table: std.Arra
     switch(lookup) {
         .NO =>
         {
-            print("use of undeclared identifier '{s}' in proc '{s}'\n", .{lookup.NO, fn_name});
-            @panic("aborting now\n");
+            print("SCOPE_LEAK_ERROR :: use of undeclared identifier '{s}' in proc '{s}'\n\n", .{lookup.NO, fn_name});
+            print("Process terminated with exit status 1\n\n", .{});
+            std.process.exit(0);
         },
 
         else => {  }
@@ -219,7 +220,61 @@ pub fn expressions_name_collection(expr: EXPRESSIONS) std.ArrayList([] const u8)
                     names.append(var_name) catch @panic("could not append to names\n");
                 },
 
-                //TODO: pointer dereference, array access
+                .pointer_deref => 
+                {
+                    const top_literal = literal_name.pointer_deref.deref_literal.*;
+
+                    // instead of looping, make this work only once, this way, pointer deref and array access
+                    // can only happen in 1 level of indirection
+                    switch(top_literal) {
+
+                        .variable => 
+                        {
+                            const var_name = top_literal.variable.inner_value;
+                            names.append(var_name) catch @panic("could not append to names\n");
+                        },
+
+                        .member_access =>
+                        {
+                            const var_name = top_literal.member_access.record_type_name;
+                            names.append(var_name) catch @panic("could not append to names\n");
+                        },
+
+                        else => {  }
+
+                    }
+
+                },
+
+                .array_access => 
+                {
+                    const top_literal = literal_name.array_access.array_var.*;
+
+                    switch(top_literal) {
+
+                        .variable => 
+                        {
+                            const var_name = top_literal.variable.inner_value;
+                            names.append(var_name) catch @panic("could not append to names\n");
+                        },
+
+                        .member_access =>
+                        {
+                            const var_name = top_literal.member_access.record_type_name;
+                            names.append(var_name) catch @panic("could not append to names\n");
+                        },
+
+                        else => {  }
+
+                    }
+
+                    const access_index = expressions_name_collection(literal_name.array_access.access_index.*); 
+
+                    for(access_index.items) |name| {
+                        names.append(name) catch @panic("could not append to names\n");
+                    }
+
+                },
 
                 else =>
                 {  } // nothing to do
@@ -284,6 +339,15 @@ pub fn expressions_name_collection(expr: EXPRESSIONS) std.ArrayList([] const u8)
                 for(inner_names.items) |name| {
                     names.append(name) catch @panic("could not append to names\n");
                 }
+            }
+        },
+
+        // for '( expr )'
+        .closed_expr =>
+        {
+            const closed_expr = expressions_name_collection(expr.closed_expr.inner_expr.*);
+            for(closed_expr.items) |name| {
+                names.append(name) catch @panic("could not append to names\n");
             }
         },
 
@@ -389,34 +453,35 @@ pub fn get_fn_arg_names(func: DEFINITIONS) ?std.ArrayList([]const u8) {
 //
 // }
 //
-// test {
-//     print("-- CHECK SCOPE LEAK\n", .{});
-//
-//     const s = 
-//     \\ anon :: proc() void {
-//     \\       a :: mut i32;
-//     \\       b :: i32 = a; 
-//     \\
-//     \\       for x in 100 + 200 : a + b : {
-//     \\             l :: i32 = x;
-//     \\       }
-//     \\ 
-//     \\      some_number :: i32 = 500;
-//     \\
-//     \\      if some_number == 40 : {
-//     \\          lpd :: i32;
-//     \\          mpd :: i32;
-//     \\      } elif some_number == 200 : {
-//     \\          lpd :: i64 = lpd;
-//     \\      }
-//     \\       
-//     \\ };
-//     ;
-//
-//     var parser = Parser.init_for_tests(s);
-//     const parsed = parser.parse_program();
-//
-//     const list = std.ArrayList([]const u8).init(default_allocator);
-//     check_scope_leak(parsed.items[0].function_def.fn_block, list, "anon");
-//
-// }
+test {
+    print("-- CHECK SCOPE LEAK\n", .{});
+
+    const s = 
+    \\ anon :: proc() void {
+    \\       a :: mut i32;
+    \\       b :: i32 = a; 
+    \\
+    \\       for x in 100 + 200 : a + b : {
+    \\             l :: i32 = x;
+    \\       }
+    \\ 
+    \\      some_number :: i32 = 500;
+    \\
+    \\      if some_number == 40 : {
+    \\          lpd :: i32;
+    \\          mpd :: i32;
+    \\      } elif some_number == 200 : {
+    \\          lpd :: i64 = (a + b + (a - b + (a ** b)) + a + a[c]);
+    \\      }
+    \\       
+    \\ };
+    ;
+
+    var parser = Parser.init_for_tests(s);
+    const parsed = parser.parse_program();
+
+    const list = std.ArrayList([]const u8).init(default_allocator);
+    check_scope_leak(parsed.items[0].function_def.fn_block, list, "anon");
+
+    print("passed..\n\n", .{});
+}

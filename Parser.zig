@@ -322,17 +322,17 @@ pub const Parser = struct {
             .base_left_bracket => { // array types
                 self.advance_token();
 
+                var size: ?[]const u8 = null;
+
                 // arrays can not have expressions as part of their types
-                // number :: [1 + (2-3 ** (2 == 0)) + if(x==0) { break 5; }]i32 = {}
+                // number :: [1 + (2-3 ** (2 == 0))]i32 = {}
                 // does not work for obvious reasons
                 //
                 // checking: "mut"? "[" SIZE "]" LONELY_TYPE
-                if(self.expect_token(.literal_number) == false) {
-                    @panic("array type with no size is not allowed, originating in parse_type\n");
+                if(self.expect_token(.literal_number)) {
+                    size = self.peek_token().lexeme.?;
+                    self.advance_token();
                 }
-
-                const size = self.peek_token().lexeme.?;
-                self.advance_token();
 
                 if(self.expect_token(.base_right_bracket) == false) {
                     @panic("unterminated '[' in array type, originating in parse_types\n");
@@ -534,6 +534,26 @@ pub const Parser = struct {
                     };
                 }
             },
+
+
+            // pointer dereference
+            // like so, ^LITERAL
+            .type_pointer => {
+                self.expect_advance_token(.type_pointer);
+
+                const literal_ptr = Self.default_allocator.create(LITERALS) catch @panic("Unable to allocate memory to literal_ptr in parse_literals\n");
+                literal_ptr.* = self.parse_literals();
+
+                self.putback_token();
+
+                return_literal = LITERALS {
+                    .pointer_deref = .{
+                        .deref_literal = literal_ptr,
+                    },
+                };
+
+            },
+
 
             else => {
                 @panic("non-literal type received in parse_literals\n");
@@ -885,6 +905,8 @@ pub const Parser = struct {
 
     }
 
+    var NO_OF_PAREN_IN_CLOSED_EXPR : i32 = 0;
+
     //
     // right side may only contain struct creation, and nothing else
     // struct_init require ',' after every field
@@ -944,7 +966,6 @@ pub const Parser = struct {
 
     /////////////////////// EXPRESSIONS /////////////////////////// start ///
 
-    var NO_OF_PAREN_IN_CLOSED_EXPR : i32 = 0;
 
     //
     // parses expressions without consuming last token
@@ -956,7 +977,7 @@ pub const Parser = struct {
         const tok = self.peek_token();
         switch(tok.kind) {
 
-            .literal_number, .literal_float, .literal_char, .literal_string =>
+            .literal_number, .literal_float, .literal_char, .literal_string, .type_pointer =>
             {
                 expr_ptr  = self.parse_literal_expr();
             },
@@ -985,14 +1006,16 @@ pub const Parser = struct {
 
             .base_left_paren =>
             {
-                NO_OF_PAREN_IN_CLOSED_EXPR += 1;
                 expr_ptr = self.parse_closed_expr();
             },
 
             .base_right_paren =>
             {
-                NO_OF_PAREN_IN_CLOSED_EXPR -= 1;
                 self.expect_advance_token(.base_right_paren);
+                
+                // in case of closed_expr, (A + B) + C means +C is part of that expr
+                if(self.peek_is_operator() or self.expect_token(.base_right_paren)) expr_ptr = self.parse_expr();
+                
             },
 
             .base_add, .base_sub,
@@ -1508,6 +1531,7 @@ pub const Parser = struct {
 /////// PARSER TESTS /////////////// PARSER TESTS /////////////// PARSER TESTS ////////
 ///////////////////////////////////////////////////////////////////////////////////////
 
+//
 // test {
 //     print("-- TEST LITERALS\n", .{});
 //     var parser = Parser.init_for_tests("0;");
@@ -1946,5 +1970,46 @@ pub const Parser = struct {
 //
 //
 //     print("\n", .{});
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST PARSE_ENVELOPED_EXPR\n", .{});
+//
+//     var parser = Parser.init_for_tests("(a + (b - c))");
+//     const expr = parser.parse_expr();
+//     print("{any}\n", .{parser.peek_token().kind});
+//
+//
+//     print("( {s}\t", .{expr.closed_expr.inner_expr.literal_expr.inner_literal.variable.inner_value});
+//     print("{any}\t", .{expr.closed_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_operator});
+//     print("( {s}\t", .{expr.closed_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_expr.closed_expr.inner_expr.literal_expr.inner_literal.variable.inner_value});
+//     print("{any}\t", .{expr.closed_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_expr.closed_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_operator});
+//     print("{s} ) )\t", .{expr.closed_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_expr.closed_expr.inner_expr.literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal.variable.inner_value});
+//
+//     print("\n", .{});
+//     print("passed..\n\n", .{});
+// }
+//
+//
+// test {
+//     print("-- TEST POINTER DEREF SYNTAX\n", .{});
+//
+//     var parser = Parser.init_for_tests("^some_funny_var_name");
+//     const literal = parser.parse_literals();
+//
+//     print("deref -> {s}\n", .{literal.pointer_deref.deref_literal.variable.inner_value});
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST PARSE ARRAY TYPE\n", .{});
+//
+//     var parser = Parser.init_for_tests("mut [64]i32");
+//     const types = parser.parse_type();
+//
+//     print("{any}\n", .{types});
+//
 //     print("passed..\n\n", .{});
 // }
