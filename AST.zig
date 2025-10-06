@@ -98,15 +98,16 @@ pub const EXPRESSIONS = union(enum) {
     fn_call_expr: struct {
         fn_name: []const u8,
         inner_expr_list: std.ArrayList(*EXPRESSIONS),
+        then_expr: *EXPRESSIONS, // in a + b(c -d) + f, +f is then_expr
     },
 
     return_expr: struct {
         inner_expr: *EXPRESSIONS,
     },
 
-    break_expr: struct {
-        inner_expr: *EXPRESSIONS,
-    },
+    // break_expr: struct {
+    //     inner_expr: *EXPRESSIONS,
+    // },
 
     closed_expr: struct {
         inner_expr: *EXPRESSIONS,

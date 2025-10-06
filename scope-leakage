@@ -1,0 +1,40 @@
+
+Consider, the following problem:
+
+{                      
+
+  {      <---------+- beginning of scope 1
+    x :: mut i32;
+  }      <---------+- ending of scope 1
+
+  {      <---------+- beginning of scope 1
+    x = 0; 
+  }      <---------+- ending of scope 1
+}
+
+since, x is declared in scope 1(prior to x = 0) a simple scope name
+lookup will make this code valid, leaking the previous scope of same level(ie 1)
+into another scope
+
+Solution:
+
+{                      
+
+  {      <---------+- beginning of scope 1
+    x :: mut i32;
+  }      <---------+- ending of scope 1
+
+  <---------+- beginning of scope 0
+
+  {      <---------+- beginning of scope 1
+    x = 0; 
+  }      <---------+- ending of scope 1
+}
+
+
+lookup scope in this way:
+for(x = 0) lookup in the latter scope 1, and if it fails to find the name,
+move to a degree lower(ie scope 0).
+if(x = 0) lookup for x fails in scope 0, you can move a degree lower(ie GLOBAL),
+but not a degree higher(scope 1).
+

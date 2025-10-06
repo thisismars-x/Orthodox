@@ -846,6 +846,7 @@ pub const Parser = struct {
             .fn_call_expr = .{
                 .fn_name = fn_name,
                 .inner_expr_list = arg_list,
+                .then_expr = self.parse_expr(),
             }
         };
 
@@ -1912,5 +1913,38 @@ pub const Parser = struct {
 //
 //     print("len :: {d}\n", .{parsed.items.len});
 //     print("{any}\n", .{parsed.items[4]});
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST PARSE_FUNCTION_EXPR\n", .{});
+//
+//     var parser = Parser.init_for_tests("a + get_name(c - d) + fifty;");
+//     const expr = parser.parse_expr();
+//
+//     const literal_expr = expr.literal_expr;
+//     print("{s}\t", .{literal_expr.inner_literal.variable.inner_value});
+//
+//     const literal_inner_expr = literal_expr.inner_expr;
+//     print("{any}\t", .{literal_inner_expr.operator_expr.inner_operator});
+//
+//     const operator_expr = literal_inner_expr.operator_expr.inner_expr.fn_call_expr;
+//     print("{s}\t", .{operator_expr.fn_name});
+//
+//     const arg1 = operator_expr.inner_expr_list.items[0].literal_expr.inner_literal.variable.inner_value;
+//     print("{s}\t", .{arg1});
+//
+//     const fn_op = operator_expr.inner_expr_list.items[0].literal_expr.inner_expr.operator_expr.inner_operator;
+//     print("{any}\t", .{fn_op});
+//
+//     const arg2 = operator_expr.inner_expr_list.items[0].literal_expr.inner_expr.operator_expr.inner_expr.literal_expr.inner_literal.variable.inner_value;
+//     print("{s}\t", .{arg2});
+//
+//     const then_expr = operator_expr.then_expr;
+//     print("{any}\t", .{then_expr.operator_expr.inner_operator});
+//     print("{s}\t", .{then_expr.operator_expr.inner_expr.literal_expr.inner_literal.variable.inner_value});
+//
+//
+//     print("\n", .{});
 //     print("passed..\n\n", .{});
 // }
