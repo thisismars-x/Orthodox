@@ -17,6 +17,11 @@ const LexErrorContext = errors.LexErrorContext;
 const std = @import("std");
 const print = std.debug.print;
 
+const CompilerDirectives = @import("./CompilerDirectives.zig");
+const __expand_aliases = CompilerDirectives.__expand_aliases;
+const __extract_includes = CompilerDirectives.__extract_includes;
+const __extract_imports = CompilerDirectives.__extract_imports;
+
 //
 // Tokenize stream of characters, one by one, instead of tokenizing
 // the whole file at once
@@ -30,6 +35,12 @@ pub const StreamLexer = struct {
 
     // error context throughout this lexer, to record and write errors to console
     error_context: LexErrorContext,
+
+    // in_code_include_directives for C-headers
+    include_directives: std.ArrayList([]const u8),
+
+    // Orthodox import file list
+    import_directives: std.ArrayList([]const u8),
 
     const Self = @This();
     const MaxSourceSizeLimit = 10_000 * 200; // 10_000 lines times 200 columns
@@ -50,6 +61,8 @@ pub const StreamLexer = struct {
             .pos = 0,
             .line = 1,
             .error_context = LexErrorContext.zero_init_err_context(),
+            .include_directives = std.ArrayList([]const u8).init(Self.default_allocator),
+            .import_directives = std.ArrayList([]const u8).init(Self.default_allocator),
         };
     }
 
@@ -64,7 +77,23 @@ pub const StreamLexer = struct {
         // do not delegate this to lex-ing process
         remove_comments(source[0..source.len]);
 
-        return Self.raw_init(source, filename);
+        // expand aliases of form '#alias <src> <target>'
+        source = __expand_aliases(source[0..source.len], Self.default_allocator);
+
+        const expanded_directives = __extract_includes(source[0..source.len], Self.default_allocator);
+        source = expanded_directives.code;
+
+        const expanded_imports = __extract_imports(source[0..source.len], Self.default_allocator);
+        source = expanded_imports.code;
+
+
+        var lexer = Self.raw_init(source, filename);
+        lexer.include_directives = expanded_directives.includes;
+        lexer.import_directives = expanded_imports.imports;
+
+        for(lexer.import_directives.items) |item| print("{s}\n", .{item});
+
+        return lexer;
     }
 
     //////////////////// SCAN-SYMBOLS //////////////// start //

@@ -43,10 +43,6 @@ pub fn __emit_program(program: PROGRAM, emitter: EMIT) void {
     // open file, truncate if already existing
     var emit_file = std.fs.cwd().createFile(emit_to, .{}) catch @panic("could not open file for writing, check permissions\n");
 
-    // compile to executable using this backend
-    const emitter_backend = emitter.use_backend;
-    _ = emitter_backend;
-
     // this string gets written to the file at last
     var emitted_code = std.ArrayList(u8).init(default_allocator);
 
@@ -72,7 +68,7 @@ pub fn __emit_program(program: PROGRAM, emitter: EMIT) void {
 
     emit_file.writeAll(emitted_code.toOwnedSlice() catch @panic("could not own slice owned by emitted_code\n")) catch @panic("could not write bytes to file in __emit_program\n");
 
-    print("{s}", .{emitted_code.toOwnedSlice() catch unreachable});
+    return;
 
 }
 
@@ -182,6 +178,12 @@ pub fn __c_fn_call_expr_transform(expr: EXPRESSIONS) BUFFER {
     for(inner_expr_list) |some_expr| {
         return_buffer.appendSlice(__c_expr_transform(some_expr.*)) catch @panic("could not append to return_buffer in __c_fn_call_expr_transform\n");
         return_buffer.appendSlice(", ") catch @panic("could not append to return_buffer in __c_fn_call_expr_transform\n");
+    }
+
+    // trailing comma
+    if(inner_expr_list.len != 0) {
+        _ = return_buffer.pop();
+        _ = return_buffer.pop();
     }
 
     // close left paren of fn_Call
@@ -386,24 +388,30 @@ pub fn __c_literal_transform(literal: LITERALS) BUFFER {
     switch(literal) {
 
         .number =>
-        std.fmt.bufPrint(&buffer, "(({s})({s}))", .{map_internal_types(literal.number.number_type_name), literal.number.inner_value}) catch @panic("could not format string, maybe increase buffer buffer size\n"),
+        std.fmt.bufPrint(&buffer, " {s} ", .{literal.number.inner_value}) catch @panic("could not format string, maybe increase buffer buffer size\n"),
         
         .string =>
-        std.fmt.bufPrint(&buffer, "(({s})({s}))", .{map_internal_types("String"), literal.string.inner_value}) catch @panic("could not format string, maybe increase buffer buffer size\n"),
+        std.fmt.bufPrint(&buffer, " {s} ", .{literal.string.inner_value}) catch @panic("could not format string, maybe increase buffer buffer size\n"),
 
         .char => 
-        std.fmt.bufPrint(&buffer, "(({s})({s}))", .{map_internal_types("char"), literal.char.inner_value}) catch @panic("could not format string, maybe increase buffer buffer size\n"),
+        std.fmt.bufPrint(&buffer, " {s} ", .{literal.char.inner_value}) catch @panic("could not format string, maybe increase buffer buffer size\n"),
 
         .variable =>
-        std.fmt.bufPrint(&buffer, "({s})", .{literal.variable.inner_value}) catch @panic("could not format string, maybe increase buffer buffer size\n"),
+        std.fmt.bufPrint(&buffer, " {s} ", .{literal.variable.inner_value}) catch @panic("could not format string, maybe increase buffer buffer size\n"),
 
         .member_access =>
-        std.fmt.bufPrint(&buffer, "({s})", .{structure_member_access(literal)}) catch @panic("could not format string, maybe increase buffer buffer size\n"),
+        std.fmt.bufPrint(&buffer, " {s} ", .{structure_member_access(literal)}) catch @panic("could not format string, maybe increase buffer buffer size\n"),
 
         .pointer_deref =>
         ptr_blk: {
             const ptr_literal = __c_literal_transform(literal.pointer_deref.deref_literal.*);
-            break :ptr_blk std.fmt.bufPrint(&buffer, "(*{s})", .{ptr_literal}) catch @panic("could not format string, maybe increase buffer buffer size\n");
+            break :ptr_blk std.fmt.bufPrint(&buffer, " *{s} ", .{ptr_literal}) catch @panic("could not format string, maybe increase buffer buffer size\n");
+        },
+
+        .variable_ref =>
+        ref_blk: {
+            const ref_literal = __c_literal_transform(literal.variable_ref.ref_literal.*);
+            break :ref_blk std.fmt.bufPrint(&buffer, " &{s} ", .{ref_literal}) catch @panic("could not format string, maybe increase buffer buffer size\n");
         },
 
         .array_access =>
@@ -753,7 +761,7 @@ pub fn __c_fn_def_transform(func: DEFINITIONS, is_hoist: bool) BUFFER {
 
     return_buffer.appendSlice("auto ") catch @panic("could not append to return_buffer in __c_fn_def_transform\n");
     return_buffer.appendSlice(func.function_def.fn_name) catch @panic("could not append to return_buffer in __c_fn_def_transform\n");
-    return_buffer.appendSlice(__c_types_transform(func.function_def.fn_type.*, !IS_STRUCT_DEF)) catch @panic("could not append to return_buffer in __c_fn_def_transform\n");
+    return_buffer.appendSlice(__c_types_transform(func.function_def.fn_type.*, IS_FN_DEF)) catch @panic("could not append to return_buffer in __c_fn_def_transform\n");
     if(is_hoist) {
         return_buffer.appendSlice(";\n") catch @panic("could not append to return_buffer in __c_fn_def_transform\n");
         return return_buffer.toOwnedSlice() catch @panic("could not own slice pointed by buffer\n");
@@ -774,6 +782,7 @@ pub fn __c_fn_def_transform(func: DEFINITIONS, is_hoist: bool) BUFFER {
 ///////////////////// CODE-GEN TYPES ////////////////////////// start ////
 
 const IS_STRUCT_DEF: bool = true;
+const IS_FN_DEF: bool = true;
 
 //
 // transforms all types
@@ -809,7 +818,7 @@ pub fn __c_types_transform(types: TYPES, is_struct_def: bool) BUFFER {
 
         .pointer =>
         {
-            if(!types.pointer.mut and !is_struct_def) { return_buffer.appendSlice("const ") catch @panic("could not append to return_buffer in __c_types_transform\n"); }
+            // if(!types.pointer.mut and !is_struct_def) { return_buffer.appendSlice("const ") catch @panic("could not append to return_buffer in __c_types_transform\n"); }
             const ptr_to = __c_types_transform(types.pointer.ptr_to.*, is_struct_def);
 
             return_buffer.appendSlice(ptr_to) catch @panic("could not append to return_buffer in __c_types_transform\n");
@@ -819,7 +828,7 @@ pub fn __c_types_transform(types: TYPES, is_struct_def: bool) BUFFER {
 
         .reference =>
         {
-            if(!types.reference.mut and !is_struct_def) { return_buffer.appendSlice("const ") catch @panic("could not append to return_buffer in __c_types_transform\n"); }
+            // if(!types.reference.mut and !is_struct_def) { return_buffer.appendSlice("const ") catch @panic("could not append to return_buffer in __c_types_transform\n"); }
             const ref_to = __c_types_transform(types.reference.reference_to.*, is_struct_def);
 
             return_buffer.appendSlice(ref_to) catch @panic("could not append to return_buffer in __c_types_transform\n");
@@ -863,11 +872,10 @@ pub fn __c_types_transform(types: TYPES, is_struct_def: bool) BUFFER {
                     return_buffer.appendSlice(", ") catch @panic("could not append to return_buffer in __c_types_transform\n");
                 }
 
+                // trailing commas
+                _ = return_buffer.pop();
+                _ = return_buffer.pop();
             } 
-
-            // trailing commas
-            _ = return_buffer.pop();
-            _ = return_buffer.pop();
 
             return_buffer.appendSlice(" )") catch @panic("could not append to return_buffer in __c_types_transform\n");
             return_buffer.appendSlice(" -> ") catch @panic("could not append to return_buffer in __c_types_transform\n");
@@ -1001,7 +1009,7 @@ test {
     print("-- TEST FUNCTION_DEF\n", .{});
     
     const s = 
-    \\ add :: proc(a :: @int, b :: @int) int {
+    \\ add :: proc() int {
     \\      return a + b;
     \\ };
     ;

@@ -9,7 +9,7 @@ logger :: struct {
 // file_handle to STDFILENO
 FileHandle :: enum { STDIN, STDOUT, STDERR, };
 
-main :: proc(argc :: u32, args :: [64]String) void {
+main :: proc(argc :: int, args :: [64]String) void {
 
   a :: mut i32 = FileHandle.STDIN;
    

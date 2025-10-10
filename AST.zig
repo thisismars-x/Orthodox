@@ -230,6 +230,10 @@ pub const LITERALS = union(enum) {
         deref_literal: *LITERALS, // but may not be number, string, char
     },
 
+    variable_ref: struct {
+        ref_literal: *LITERALS, // @variable takes variable ref
+    },
+
     // array access are only allowed to one-level
     // x.y.z[100][200][300] just complicates life
     // instead: a :: mut i32 = x.y.z[100]; a = a[200]; a = a[300];

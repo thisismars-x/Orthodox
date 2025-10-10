@@ -206,6 +206,15 @@ pub const Parser = struct {
                 };
             },
 
+            .type_int => {
+                this_type = TYPES {
+                    .number = .{
+                        .focused_type = "int",
+                        .mut = type_is_mut,
+                    }
+                };
+            },
+
             .type_u8 => {
                 this_type = TYPES {
                     .number = .{
@@ -552,6 +561,23 @@ pub const Parser = struct {
                     },
                 };
 
+            },
+
+            // variable reference
+            // like so, @LITERAL
+            .type_reference => {
+                self.expect_advance_token(.type_reference);
+
+                const literal_ptr = Self.default_allocator.create(LITERALS) catch @panic("Unable to allocate memory to literal_ptr in parse_literals\n");
+                literal_ptr.* = self.parse_literals();
+
+                self.putback_token();
+
+                return_literal = LITERALS {
+                    .variable_ref = .{
+                        .ref_literal = literal_ptr,
+                    },
+                };
             },
 
             else => {
@@ -976,7 +1002,7 @@ pub const Parser = struct {
         const tok = self.peek_token();
         switch(tok.kind) {
 
-            .literal_number, .literal_float, .literal_char, .literal_string, .type_pointer =>
+            .literal_number, .literal_float, .literal_char, .literal_string, .type_pointer, .type_reference =>
             {
                 expr_ptr  = self.parse_literal_expr();
             },
