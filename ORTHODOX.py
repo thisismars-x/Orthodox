@@ -58,6 +58,8 @@ def __compile_down():
         filename = args.input_file.split(".")
         filename = f"{filename[0]}.cpp"
         os.rename(ORTHODOX_TRANSIT_FILE, filename)
+    else:
+        os.remove(ORTHODOX_TRANSIT_FILE)
 
 
     if(result.stderr):

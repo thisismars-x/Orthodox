@@ -49,6 +49,32 @@ pub fn __main_emit_program(filename: []const u8) void {
     var parser = Parser.raw_init_with_file(filename);
     const program = parser.parse_program();
     
+    // check scope leakage
+    for(program.items) |program_def| {
+        var symbol_table = std.ArrayList([]const u8).init(default_allocator);
+
+        switch(program_def) {
+
+            .function_def =>
+            {
+                const arg_names = program_def.function_def.fn_type.*.function.args_and_types;
+
+                if(arg_names) |args| {
+                    var iter = args.iterator();
+                    while(iter.next()) |arg_name| {
+                        symbol_table.append(arg_name.key_ptr.*) catch @panic("could not append to symbol_table in __main_emit_program\n");
+                    }
+                }
+
+                check_scope_leak(program_def.function_def.fn_block, symbol_table, program_def.function_def.fn_name);
+            },
+
+
+            else => {  } // nothing to do
+
+        }
+    }
+
     var emitter = EMIT.with(ORTHODOX_TRANSIT_FILE, 11);
     emitter.add_include_directives(parser.include_cheaders);
 

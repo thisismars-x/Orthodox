@@ -456,28 +456,7 @@ pub fn get_fn_arg_names(func: DEFINITIONS) ?std.ArrayList([]const u8) {
 // test {
 //     print("-- CHECK SCOPE LEAK\n", .{});
 //
-//     const s = 
-//     \\ anon :: proc() void {
-//     \\       a :: mut i32;
-//     \\       b :: i32 = a; 
-//     \\
-//     \\       for x in 100 + 200 : a + b : {
-//     \\             l :: i32 = x;
-//     \\       }
-//     \\ 
-//     \\      some_number :: i32 = 500;
-//     \\
-//     \\      if some_number == 40 : {
-//     \\          lpd :: i32;
-//     \\          mpd :: i32;
-//     \\      } elif some_number == 200 : {
-//     \\          lpd :: i64 = (a + b + (a - b + (a ** b)) + a + a[c]);
-//     \\      }
-//     \\       
-//     \\ };
-//     ;
-//
-//     var parser = Parser.init_for_tests(s);
+//     var parser = Parser.raw_init_with_file("./exa.ox");
 //     const parsed = parser.parse_program();
 //
 //     const list = std.ArrayList([]const u8).init(default_allocator);
