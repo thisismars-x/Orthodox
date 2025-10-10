@@ -218,6 +218,9 @@ pub const StreamLexer = struct {
         } else if (std.mem.eql(u8, lexeme, "i32")) {
             token.kind = .type_i32;
             token.lexeme = null;
+        } else if (std.mem.eql(u8, lexeme, "int")) {
+            token.kind = .type_int;
+            token.lexeme = null;
         } else if (std.mem.eql(u8, lexeme, "i64")) {
             token.kind = .type_i64;
             token.lexeme = null;

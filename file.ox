@@ -48,5 +48,5 @@ print_array_of_strings :: proc() void {
 
 add :: proc(i :: i32, j :: i32) i32 {
   add(i, j, 'c', "de", 100.24 * 2 - 3 ** 2, 100 and 200 & 500, some.structfield[i + j]);
-  return i + j;
+  return i + j + k >> 3;
 };

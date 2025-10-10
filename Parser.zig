@@ -554,7 +554,6 @@ pub const Parser = struct {
 
             },
 
-
             else => {
                 @panic("non-literal type received in parse_literals\n");
             },
@@ -1012,10 +1011,8 @@ pub const Parser = struct {
             .base_right_paren =>
             {
                 self.expect_advance_token(.base_right_paren);
-                
-                // in case of closed_expr, (A + B) + C means +C is part of that expr
-                if(self.peek_is_operator() or self.expect_token(.base_right_paren)) expr_ptr = self.parse_expr();
-                
+
+                if(self.peek_is_operator()) expr_ptr = self.parse_expr();
             },
 
             .base_add, .base_sub,
@@ -1062,7 +1059,7 @@ pub const Parser = struct {
     //////////////////////// LOOP /////////////////////////// start ///
 
 
-    fn parse_for_stmt(self: *Self) *STATEMENTS {
+    pub fn parse_for_stmt(self: *Self) *STATEMENTS {
 
         self.expect_advance_token(.keyword_for);
         if(!self.expect_token(.base_identifier)) @panic("in for-loop, expected, identifier_name after .keyword_for\n");
