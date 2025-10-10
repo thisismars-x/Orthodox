@@ -21,6 +21,7 @@ const CompilerDirectives = @import("./CompilerDirectives.zig");
 const __expand_aliases = CompilerDirectives.__expand_aliases;
 const __extract_includes = CompilerDirectives.__extract_includes;
 const __extract_imports = CompilerDirectives.__extract_imports;
+const __expand_string = CompilerDirectives.__expand_string;
 
 //
 // Tokenize stream of characters, one by one, instead of tokenizing
@@ -85,7 +86,7 @@ pub const StreamLexer = struct {
 
         const expanded_imports = __extract_imports(source[0..source.len], Self.default_allocator);
         source = expanded_imports.code;
-
+        source = __expand_string(source[0..source.len], Self.default_allocator);
 
         var lexer = Self.raw_init(source, filename);
         lexer.include_directives = expanded_directives.includes;

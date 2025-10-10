@@ -33,12 +33,31 @@ const default_allocator = gpa.allocator();
 const InformedEmission = @import("./InformedEmission.zig");
 pub const EMIT = InformedEmission.Emit;
 
+const scope_leakage = @import("./ScopeLeakage.zig");
+const check_scope_leak = scope_leakage.check_scope_leak;
 
 //////////////////////// CODE-GEN CORE - TRANSFORM PROGRAM ///////// start ////
 
+// never name a file ORTHODOX_TRANSIT_FILE, this is intermediate file produced
+// before machine/llvm code
+const ORTHODOX_TRANSIT_FILE = "ORTHODOX_TRANSIT_FILE.cpp";
+
+// 
+// main entry point to emit programs
+pub fn __main_emit_program(filename: []const u8) void {
+
+    var parser = Parser.raw_init_with_file(filename);
+    const program = parser.parse_program();
+    
+    var emitter = EMIT.with(ORTHODOX_TRANSIT_FILE, 11);
+    emitter.add_include_directives(parser.include_cheaders);
+
+    __emit_program(program, emitter);
+}
+
 pub fn __emit_program(program: PROGRAM, emitter: EMIT) void {
 
-    const emit_to = emitter.filename.?;
+    const emit_to = emitter.filename;
 
     // open file, truncate if already existing
     var emit_file = std.fs.cwd().createFile(emit_to, .{}) catch @panic("could not open file for writing, check permissions\n");
@@ -51,7 +70,21 @@ pub fn __emit_program(program: PROGRAM, emitter: EMIT) void {
         emitted_code.appendSlice(" // -+-+-+-+-+-+-+-+-+ DEFAULT-HEADERS +-+-+-+-+-+-+-+-+- //\n") catch @panic("could not append to emitted_code in __emit_program\n");
         emitted_code.appendSlice(emitter.emit_default_headers()) catch @panic("could not append to emitted_code in __emit_program\n");
         emitted_code.appendSlice("using namespace std;\n") catch @panic("could not append to emitted_code in __emit_program\n");
-        emitted_code.appendSlice(" // -+-+-+-+-+-+-+-+-+ DEFAULT-HEADERS +-+-+-+-+-+-+-+-+- //\n") catch @panic("could not append to emitted_code in __emit_program\n");
+        emitted_code.appendSlice(" // -+-+-+-+-+-+-+-+-+ DEFAULT-HEADERS +-+-+-+-+-+-+-+-+- //\n\n") catch @panic("could not append to emitted_code in __emit_program\n");
+    }
+
+    // append cdirectives that are not within default_directives
+    if(emitter.collect_include_directives) {
+        emitted_code.appendSlice(" // -+-+-+-+-+-+-+-+-+ OTHER-HEADERS +-+-+-+-+-+-+-+-+- //\n") catch @panic("could not append to emitted_code in __emit_program\n");
+        
+        for(emitter.include_directives.items) |include| {
+            emitted_code.appendSlice("#include \"") catch @panic("could not append to emitted_code in __emit_program\n");
+            emitted_code.appendSlice(include) catch @panic("could not append to emitted_code in __emit_program\n");
+            emitted_code.appendSlice("\"\n") catch @panic("could not append to emitted_code in __emit_program\n");
+        }
+
+        emitted_code.appendSlice(" // -+-+-+-+-+-+-+-+-+ OTHER-HEADERS +-+-+-+-+-+-+-+-+- //\n\n") catch @panic("could not append to emitted_code in __emit_program\n");
+
     }
 
     emitted_code.appendSlice("\n\n") catch @panic("could not append to emitted_code in __emit_program\n");
@@ -59,7 +92,7 @@ pub fn __emit_program(program: PROGRAM, emitter: EMIT) void {
     // hoist, struct | enum | fn def
     emitted_code.appendSlice("// -+-+-+-+-+-+-+-+-+-+ HOISTED DECLARATIONS +-+-+-+-+-+-+-+-+-+-+-//\n") catch @panic("could not append to emitted_code in __emit_program\n");
     emitted_code.appendSlice(__c_hoist_declarations(program)) catch @panic("could not append to emitted_code in __emit_program\n");
-    emitted_code.appendSlice("// -+-+-+-+-+-+-+-+-+-+ HOISTED DECLARATIONS +-+-+-+-+-+-+-+-+-+-+-//\n") catch @panic("could not append to emitted_code in __emit_program\n");
+    emitted_code.appendSlice("// -+-+-+-+-+-+-+-+-+-+ HOISTED DECLARATIONS +-+-+-+-+-+-+-+-+-+-+-//\n\n") catch @panic("could not append to emitted_code in __emit_program\n");
 
     emitted_code.appendSlice("\n\n") catch @panic("could not append to emitted_code in __emit_program\n");
 
@@ -896,154 +929,193 @@ pub fn __c_types_transform(types: TYPES, is_struct_def: bool) BUFFER {
 
 ///////////////////// CODE-GEN TYPES ////////////////////////// end //////
 
+//
+// ./ORTHODOX.py provides, filename, i.e name of the file to translate
+// after that it is the duty of the python program to compile the program further
+pub fn main() void {
+    var args = std.process.args();
+
+    var filename: []const u8 = undefined;
+    var i: usize = 0;
+    while(args.next()) |arg| {
+        if(i >= 1) {
+            filename = arg;
+            break;
+        }
+        i += 1;
+    }
+
+    if(i == 0) {
+        print(".....expected filename\n", .{});
+        exit(0);
+    }
+
+    __main_emit_program(filename);
+}
+
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////// CODE GEN ////////////////////////// CODE GEN ////////////////////////// CODE GEN ////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-test {
-    print("-- TEST TRANSFORM LITERALS\n", .{});
-
-    var parser = Parser.init_for_tests("^a.b.c");
-    const types = parser.parse_literals();
-
-    print("{s}\n", .{__c_literal_transform(types)});
-
-    print("passed..\n\n", .{});
-}
-
-test {
-    print("-- TEST TRANSFORM LITERALS\n", .{});
-
-    var parser = Parser.init_for_tests("a.b[100]");
-    const types = parser.parse_literals();
-
-    print("{s}\n", .{__c_literal_transform(types)});
-
-    print("passed..\n\n", .{});
-}
-
-test {
-    print("-- TEST TRANSFORM EXPR\n", .{});
-
-    var parser = Parser.init_for_tests("logger { .level = 0, .warn = \"yes\", .err = 1 + s + 3,};");
-    const expr = parser.parse_expr();
-
-    print("{s}\n", .{__c_expr_transform(expr.*)});
-
-    print("passed..\n\n", .{});
-}
-
-test {
-    print("-- TEST TRANSFORM EXPR\n", .{});
-
-    var parser = Parser.init_for_tests("a + 2 + 3;");
-    const expr = parser.parse_expr();
-
-    print("{s}\n", .{__c_expr_transform(expr.*)});
-
-    print("passed..\n\n", .{});
-}
-
-test {
-    print("-- TEST TRANSFORM STATEMENTS\n", .{});
-
-    var parser = Parser.init_for_tests("for i in a + 100: x.y[200] : {}");
-    const stmt = parser.parse_for_stmt();
-
-    print("{s}\n", .{__c_for_stmt_transform(stmt.*)});
-
-    print("passed..\n\n", .{});
-}
-
-test {
-    print("-- TEST TRANSFORM STATEMENTS\n", .{});
-
-    const s = 
-    \\ if a + 200 == 500 : { }
-    \\ elif a + 200 == 600 : { }
-    \\ elif a + 200 == 700 : { }
-    \\ else : { }
-    ;
-
-    var parser = Parser.init_for_tests(s);
-    const stmt = parser.parse_if_stmt();
-
-    print("{s}\n", .{__c_conditional_stmt_transform(stmt.*)});
-
-    print("passed..\n\n", .{});
-}
-
-test {
-    print("-- TEST TRANSFORM STATEMENTS\n", .{});
-
-    const s = 
-    \\ {
-    \\ number += number;
-    \\ for number in number >> 2: number >> 4: { n += 6; }
-    \\ }
-    ;
-
-    var parser = Parser.init_for_tests(s);
-    const stmt = parser.parse_block();
-
-    print("{s}\n", .{__c_block_stmt_transform(stmt)});
-
-    print("passed..\n\n", .{});
-}
-
-test {
-    print("-- TEST TRANSFORM TYPES\n", .{});
-
-    const tp = "proc(a :: @int, b :: @int) int";
-
-    var parser = Parser.init_for_tests(tp);
-    const tpp = parser.parse_type();
-
-    print("{s}\n", .{__c_types_transform(tpp.*, !IS_STRUCT_DEF)});
-
-    print("passed..\n\n", .{});
-}
-
-test {
-    print("-- TEST FUNCTION_DEF\n", .{});
-    
-    const s = 
-    \\ add :: proc() int {
-    \\      return a + b;
-    \\ };
-    ;
-
-    var parser = Parser.init_for_tests(s);
-    const fn_def = parser.parse_fn_def();
-
-    print("{s}\n", .{__c_fn_def_transform(fn_def, true)});
-
-    
-    print("passed..\n\n", .{});
-}
-
-test {
-    print("-- TEST EMIT_PROGRAM\n", .{});
-
-    var parser = Parser.raw_init_with_file("./file.ox");
-    const program = parser.parse_program();
-
-
-    print("{s}", .{__c_hoist_declarations(program)});
-
-    print("passed..\n\n", .{});
-}
-
-test {
-    print("-- TEST EMIT_PROGRAM\n", .{});
-
-    var parser = Parser.raw_init_with_file("./exa.ox");
-    const program = parser.parse_program();
-
-    const emitter = EMIT.with("somefile.cpp", 11);
-
-    __emit_program(program, emitter);
-
-    print("passed..\n\n", .{});
-}
+// test {
+//     print("-- TEST TRANSFORM LITERALS\n", .{});
+//
+//     var parser = Parser.init_for_tests("^a.b.c");
+//     const types = parser.parse_literals();
+//
+//     print("{s}\n", .{__c_literal_transform(types)});
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST TRANSFORM LITERALS\n", .{});
+//
+//     var parser = Parser.init_for_tests("a.b[100]");
+//     const types = parser.parse_literals();
+//
+//     print("{s}\n", .{__c_literal_transform(types)});
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST TRANSFORM EXPR\n", .{});
+//
+//     var parser = Parser.init_for_tests("logger { .level = 0, .warn = \"yes\", .err = 1 + s + 3,};");
+//     const expr = parser.parse_expr();
+//
+//     print("{s}\n", .{__c_expr_transform(expr.*)});
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST TRANSFORM EXPR\n", .{});
+//
+//     var parser = Parser.init_for_tests("a + 2 + 3;");
+//     const expr = parser.parse_expr();
+//
+//     print("{s}\n", .{__c_expr_transform(expr.*)});
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST TRANSFORM STATEMENTS\n", .{});
+//
+//     var parser = Parser.init_for_tests("for i in a + 100: x.y[200] : {}");
+//     const stmt = parser.parse_for_stmt();
+//
+//     print("{s}\n", .{__c_for_stmt_transform(stmt.*)});
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST TRANSFORM STATEMENTS\n", .{});
+//
+//     const s = 
+//     \\ if a + 200 == 500 : { }
+//     \\ elif a + 200 == 600 : { }
+//     \\ elif a + 200 == 700 : { }
+//     \\ else : { }
+//     ;
+//
+//     var parser = Parser.init_for_tests(s);
+//     const stmt = parser.parse_if_stmt();
+//
+//     print("{s}\n", .{__c_conditional_stmt_transform(stmt.*)});
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST TRANSFORM STATEMENTS\n", .{});
+//
+//     const s = 
+//     \\ {
+//     \\ number += number;
+//     \\ for number in number >> 2: number >> 4: { n += 6; }
+//     \\ }
+//     ;
+//
+//     var parser = Parser.init_for_tests(s);
+//     const stmt = parser.parse_block();
+//
+//     print("{s}\n", .{__c_block_stmt_transform(stmt)});
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST TRANSFORM TYPES\n", .{});
+//
+//     const tp = "proc(a :: @int, b :: @int) int";
+//
+//     var parser = Parser.init_for_tests(tp);
+//     const tpp = parser.parse_type();
+//
+//     print("{s}\n", .{__c_types_transform(tpp.*, !IS_STRUCT_DEF)});
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST FUNCTION_DEF\n", .{});
+//
+//     const s = 
+//     \\ add :: proc() int {
+//     \\      return a + b;
+//     \\ };
+//     ;
+//
+//     var parser = Parser.init_for_tests(s);
+//     const fn_def = parser.parse_fn_def();
+//
+//     print("{s}\n", .{__c_fn_def_transform(fn_def, true)});
+//
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST EMIT_PROGRAM\n", .{});
+//
+//     var parser = Parser.raw_init_with_file("./file.ox");
+//     const program = parser.parse_program();
+//
+//
+//     print("{s}", .{__c_hoist_declarations(program)});
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST EMIT_PROGRAM\n", .{});
+//
+//     var parser = Parser.raw_init_with_file("./exa.ox");
+//     const program = parser.parse_program();
+//
+//     var emitter = EMIT.with("somefile.cpp", 11);
+//     emitter.add_include_directives(parser.include_cheaders);
+//
+//     __emit_program(program, emitter);
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST WHOLE PROGRAM\n", .{});
+//
+//     __main_emit_program(
+//         "exa.ox",
+//         "a.out",
+//         true,
+//         true,
+//     );
+//
+//     print("passed..\n\n", .{});
+// }

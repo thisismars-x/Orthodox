@@ -249,3 +249,30 @@ pub fn __extract_imports(source: []const u8, default_allocator: std.mem.Allocato
     };
 }
 
+
+//
+// if a line occurs like so,
+// "this is just a line %s", "some line",
+// wraps it around printf for quick loggging
+pub fn __expand_string(source: []const u8, allocator: std.mem.Allocator) []u8 {
+    var result = std.ArrayList(u8).init(allocator);
+
+    var it = std.mem.tokenizeAny(u8, source, "\n");
+
+    while (it.next()) |line| {
+        const trimmed = std.mem.trim(u8, line, " \t\r");
+
+        // Check if line starts with a quote
+        if (trimmed.len > 0 and (trimmed[0] == '"' or trimmed[0] == '\'')) {
+            result.appendSlice("printf(") catch @panic("could not append to result in __expand_string_printf\n");
+            result.appendSlice(trimmed) catch @panic("could not append to result in __expand_string_printf\n");
+            result.appendSlice(");\n") catch @panic("could not append to result in __expand_string_printf\n");
+        } else {
+            result.appendSlice(line) catch @panic("could not append to result in __expand_string_printf\n");
+            result.append('\n') catch @panic("could not append to result in __expand_string_printf\n");
+        }
+    }
+
+    return result.toOwnedSlice() catch @panic("could not own the slice pointed to by result\n");
+}
+

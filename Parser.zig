@@ -35,6 +35,12 @@ pub const Parser = struct {
     current_token_idx: ?usize,
 
     //
+    // c_headers and o_files can be used interchangeably
+    // this information is recorded by the lexer already(./CompilerDirectives.zig)
+    include_cheaders: std.ArrayList([]const u8),
+    import_ofiles: std.ArrayList([]const u8),
+
+    //
     // stream_tokens.items.len
     var LEN_STREAM_TOKENS: usize = undefined;
 
@@ -54,6 +60,8 @@ pub const Parser = struct {
         var parser = Self {
             .stream_tokens = std.ArrayList(Token).init(Self.default_allocator),
             .current_token_idx = null,
+            .include_cheaders = lexer.include_directives,
+            .import_ofiles = lexer.import_directives,
         };
 
         while(true) {
@@ -72,6 +80,8 @@ pub const Parser = struct {
         var parser = Self {
             .stream_tokens = std.ArrayList(Token).init(Self.default_allocator),
             .current_token_idx = null,
+            .include_cheaders = lexer.include_directives,
+            .import_ofiles = lexer.import_directives,
         };
 
         while(true) {
