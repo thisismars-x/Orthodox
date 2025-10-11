@@ -74,6 +74,7 @@ pub const DEFINITIONS = union(enum) {
         fn_name: []const u8,
         fn_type: *TYPES,
         fn_block: STATEMENTS,
+        fn_inline: bool,
     },
 
 
@@ -113,6 +114,22 @@ pub const EXPRESSIONS = union(enum) {
         fields_values: std.StringHashMap(*EXPRESSIONS),
     },
 
+    //
+    // expressions maybe casted to some desired type
+    // list_of_numbers :: ^mut int;
+    // list_of_numbers = #cast (^mut int)int mAlloc(sizeof(numbers) * 1000));
+    casted_expr: struct {
+        inner_expr: *EXPRESSIONS,
+        cast_to: TYPES
+    },
+
+    //
+    // this expr is a workaround, where i need to pass a literal
+    // but the function is designed as to only take expressions
+    workaround_expr: struct {
+        inner_literal: LITERALS,
+    },
+
 };
 
 pub const STATEMENTS = union(enum) {
@@ -141,6 +158,7 @@ pub const STATEMENTS = union(enum) {
     assignment: struct {
         lvalue_name: []const u8, // assignment does not have to weary of LITERALS- a.b :: i32; makes little sense
         lvalue_type: *TYPES,
+        lvalue_static: bool,
         rvalue_expr: ?*EXPRESSIONS,
     },
 

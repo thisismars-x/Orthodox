@@ -1,3 +1,7 @@
+////////////////////////////////////////////
+//////// INFORMED EMISSION ////////////////
+///////////////////////////////////////////
+
 const std = @import("std");
 const print = std.debug.print;
 
@@ -13,6 +17,9 @@ pub const Emit = struct {
 
     // permit all default_directives to be included when creating emit-file
     permit_default_directives: bool,
+
+    // include default_functions
+    collect_default_functions: bool,
 
     // which standard
     standard: u8,
@@ -58,6 +65,9 @@ pub const Emit = struct {
         EmitFile.collect_include_directives = true;
         EmitFile.permit_default_directives = true;
 
+        // collect default functions from fn default_functions
+        EmitFile.collect_default_functions = true;
+
         // cpp standard
         EmitFile.standard = standard; 
 
@@ -88,7 +98,38 @@ pub const Emit = struct {
         self.include_directives = directives;
     }
 
+    // 
+    // all default_functions are written here and are included in every file
+    pub fn default_functions(self: *const Self) BUFFER {
+        _ = self;
+        var emitted_code = std.ArrayList(u8).init(Self.default_allocator);
+
+        emitted_code.appendSlice(
+        \\ 
+        \\ // to change from std::string to c_str
+        \\ const char* cStr(const string& str) {
+        \\ return str.c_str(); 
+        \\ }
+        \\
+        \\ void* mAlloc(size_t size) {
+        \\    void* ptr = malloc(size);
+        \\    if (!ptr) {
+        \\        fprintf(stderr, "malloc failed for %zu bytes\n", size);
+        \\        exit(EXIT_FAILURE);
+        \\    }
+        \\    return ptr;
+        \\ }
+        \\
+        ) catch @panic("could not appendSlice to emitted_code in default_functions\n");
+
+        return emitted_code.toOwnedSlice() catch @panic("err owning slice pointed by emitted_code\n");
+    }
+
 };
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////// INFORMED EMISSION TESTS //////////////////// INFORMED EMISSION TESTS //////////////////// INFORMED EMISSION TESTS ////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // test {
 //     print("..find compiler backends\n", .{});

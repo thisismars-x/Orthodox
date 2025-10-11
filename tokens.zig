@@ -98,6 +98,7 @@ pub const token_id = enum {
     directive_mod,
     directive_inline,
     directive_static,
+    directive_cast,
     
     ////////////// DIRECTIVES ////////////// end ////
 

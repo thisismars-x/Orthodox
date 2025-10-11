@@ -109,6 +109,12 @@ pub const Parser = struct {
 
         while(!self.expect_token(.base_EOF)) {
 
+            var fn_inline = false;
+            if(self.expect_token(.directive_inline)) {
+                fn_inline = true;
+                self.expect_advance_token(.directive_inline);
+            }
+
             self.expect_advance_token(.base_identifier); // struct | enum | fn name
             self.expect_advance_token(.base_type_colon);
 
@@ -138,6 +144,7 @@ pub const Parser = struct {
 
                 .keyword_function =>
                 {
+                    if(fn_inline) self.putback_token(); // #inline
                     self.putback_token(); // .base_type_colon
                     self.putback_token(); // fn_name
 
@@ -157,6 +164,8 @@ pub const Parser = struct {
                 ),
 
             }
+
+            fn_inline = false;
 
 
         }
@@ -795,6 +804,12 @@ pub const Parser = struct {
 
     pub fn parse_fn_def(self: *Self) DEFINITIONS {
 
+        var fn_inline = false;
+        if(self.peek_token().kind == .directive_inline) {
+            fn_inline = true;
+            self.expect_advance_token(.directive_inline);
+        } 
+
         const fn_name = self.peek_token().lexeme.?;
         self.expect_advance_token(.base_identifier);
 
@@ -825,6 +840,8 @@ pub const Parser = struct {
                 .fn_name = fn_name,
                 .fn_type = fn_type,
                 .fn_block = fn_block,
+
+                .fn_inline = fn_inline,
             }
         };
 
@@ -1020,6 +1037,28 @@ pub const Parser = struct {
 
     }
 
+    pub fn parse_cast_expr(self: *Self) *EXPRESSIONS {
+        const return_expr_ptr = Self.default_allocator.create(EXPRESSIONS) catch @panic("Unable to allocate memory in parse_cast_expr\n");
+
+        self.expect_advance_token(.directive_cast);
+
+        self.expect_advance_token(.base_left_paren);
+
+        const cast_type = self.parse_type();
+
+        self.expect_advance_token(.base_right_paren);
+
+
+        return_expr_ptr.* = EXPRESSIONS {
+            .casted_expr = .{
+                .inner_expr = self.parse_expr(),
+                .cast_to = cast_type.*,
+            }
+        };
+
+        return return_expr_ptr;
+    }
+
     //
     // closed-expr are under paren ~ (a + b - (c ** d))
     // for expressions like ((x + y) + z) you might have to call this twice
@@ -1174,14 +1213,20 @@ pub const Parser = struct {
             .base_right_bracket => // access array
             self.advance_token(),
 
-            else =>
-            exit_with_msg(
-            \\ .........parser-error (./Parser.zig)
-            \\ .........unexpected token
-            \\ .........diagnostics::
-            \\ .........
-            \\ .........expected expression, but did not recognize token(./AST.zig)
-            ),
+            .directive_cast =>
+            expr_ptr = self.parse_cast_expr(),
+
+            else => 
+            {
+                print(" .........got {any}\n", .{tok.kind});
+                exit_with_msg(
+                \\ .........parser-error (./Parser.zig)
+                \\ .........unexpected token
+                \\ .........diagnostics::
+                \\ .........
+                \\ .........expected expression, but did not recognize token(./AST.zig)
+                );
+            }
 
         }
 
@@ -1270,6 +1315,12 @@ pub const Parser = struct {
     // or, ~ a :: mut i32 = 1 + 2;
     pub fn parse_assign_stmt(self: *Self) STATEMENTS {
 
+        var var_static = false;
+        if(self.expect_token(.directive_static)) {
+            var_static = true;
+            self.expect_advance_token(.directive_static);
+        }
+
         const lvalue_name = self.peek_token().lexeme.?;
         self.expect_advance_token(.base_identifier);
         self.expect_advance_token(.base_type_colon);
@@ -1283,6 +1334,7 @@ pub const Parser = struct {
                 .assignment = .{
                     .lvalue_name = lvalue_name,
                     .lvalue_type = lvalue_type,
+                    .lvalue_static = var_static,
                     .rvalue_expr = null,
                 }
             };
@@ -1298,6 +1350,7 @@ pub const Parser = struct {
             .assignment = .{
                 .lvalue_name = lvalue_name,
                 .lvalue_type = lvalue_type,
+                .lvalue_static = var_static,
                 .rvalue_expr = rvalue_expr,
             }
         };
@@ -1436,22 +1489,32 @@ pub const Parser = struct {
 
 
                 // assignment, update
-                .base_identifier =>
+                .base_identifier, .directive_static =>
                 {
+                    var var_static_assign = false;
+                    if(tok.kind == .directive_static) {
+                        self.expect_advance_token(.directive_static);
+                        var_static_assign = true;
+                    }
+
                     _  = self.expect_advance_token(.base_identifier);
 
                     if(self.expect_token(.base_type_colon)) { // assignment
+
+                        if(var_static_assign) self.putback_token(); // #static
                         self.putback_token();
+
                         const assign_stmt = self.parse_assign_stmt();
                         block_elem.append(assign_stmt) catch @panic("can not append to block_elem\n");
 
-                    } else if(self.peek_is_operator() or (self.expect_token(.base_dot))) { // update by member access : a.b += 20;
+                    // update by member access : a.b += 20; or array access a[b] += 200;
+                    } else if(self.peek_is_operator() or (self.expect_token(.base_dot)) or (self.expect_token(.base_left_bracket))) { 
                         const which_op = self.peek_token().kind;
                         self.advance_token();
 
                         if(which_op != .base_assign) {
                             //    VARIABLE UPDATE                           STRUCT MEMBER UPDATE
-                            if(self.expect_token(.base_assign) or self.expect_token(.base_identifier)) {
+                            if(self.expect_token(.base_assign) or self.expect_token(.base_identifier) or (which_op == .base_left_bracket)) {
                                 self.putback_token();
                                 self.putback_token();
                                 const var_stmt = self.parse_var_update_stmt();
@@ -1624,6 +1687,9 @@ pub const Parser = struct {
     // if expect_token(SOME_TOKEN_ID) then, advance_token()
     pub fn expect_advance_token(self: *Self, kind: token_id) void {
         if(self.expect_token(kind)) return self.advance_token();
+
+        print(" .........expected {any}\n", .{kind});
+        print(" .........got token {any}\n", .{self.peek_token().kind});
 
         exit_with_msg(
         \\ .........parser-error (./Parser.zig)
@@ -2169,6 +2235,17 @@ pub const Parser = struct {
 //     const types = parser.parse_type();
 //
 //     print("{any}\n", .{types});
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST PARSE ARRAY TYPE\n", .{});
+//
+//     var parser = Parser.init_for_tests("#cast (i32) 1+2;");
+//     const expr = parser.parse_expr();
+//
+//     print("{any}\n", .{expr});
 //
 //     print("passed..\n\n", .{});
 // }

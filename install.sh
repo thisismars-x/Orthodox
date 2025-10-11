@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 
-echo "-+-+-+-+-+-+-+-+-+-+"
-echo "|Orthodox language.|"
-echo "-+-+-+-+-+-+-+-+-+-+"
+clear
+
+echo "+-+-+-+-+-+-+-+-+-+-+"
+echo "| Orthodox language |"
+echo "+-+-+-+-+-+-+-+-+-+-+"
 echo ""
 
 # -+-+-+-+-+-+-+-+-+-+-+- FIND MINIMUM ZIG VERSION +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+

@@ -57,6 +57,17 @@ pub fn check_scope_leak(block: STATEMENTS, __symbol_table: std.ArrayList([]const
 
                     .update =>
                     {
+                        // lvalue is a literal
+                        // this is a weird cast from literal to literal_expr because
+                        // check_expr_against_symbol_table takes expr as its arg
+                        const literal = EXPRESSIONS {
+                            .workaround_expr = .{
+                                .inner_literal = block_elem.update.lvalue_name,
+                            },
+                        };
+
+                        check_expr_against_symbol_table(literal, symbol_table, fn_name);
+
                         check_expr_against_symbol_table(block_elem.update.rvalue_expr.*, symbol_table, fn_name);
                     },
 
@@ -350,6 +361,16 @@ pub fn expressions_name_collection(expr: EXPRESSIONS) std.ArrayList([] const u8)
                 names.append(name) catch @panic("could not append to names\n");
             }
         },
+
+        .casted_expr => 
+        {
+            const cast_expr = expressions_name_collection(expr.casted_expr.inner_expr.*);
+            for(cast_expr.items) |name| {
+                names.append(name) catch @panic("could not append to names\n");
+            }
+        },
+
+        .workaround_expr => {  },
 
         else => {}
 

@@ -49,12 +49,29 @@ pub fn __main_emit_program(filename: []const u8) void {
     var parser = Parser.raw_init_with_file(filename);
     const program = parser.parse_program();
     
+    var symbol_table = std.ArrayList([]const u8).init(default_allocator);
+
     // check scope leakage
     for(program.items) |program_def| {
-        var symbol_table = std.ArrayList([]const u8).init(default_allocator);
+        // 
+        // collect all enum names first
+        switch(program_def) {
+            .enum_def => {
+                for(program_def.enum_def.fields.items) |enum_fields| {
+                    symbol_table.append(enum_fields) catch @panic("could not append to symbol_table in __main_emit_program\n");
+                }
+            },
+
+            else => {  } // nothing to do
+
+        }
+    }
+
+    for(program.items) |program_def| {
 
         switch(program_def) {
 
+            // then only check functions
             .function_def =>
             {
                 const arg_names = program_def.function_def.fn_type.*.function.args_and_types;
@@ -74,6 +91,7 @@ pub fn __main_emit_program(filename: []const u8) void {
 
         }
     }
+
 
     var emitter = EMIT.with(ORTHODOX_TRANSIT_FILE, 11);
     emitter.add_include_directives(parser.include_cheaders);
@@ -115,7 +133,14 @@ pub fn __emit_program(program: PROGRAM, emitter: EMIT) void {
 
     emitted_code.appendSlice("\n\n") catch @panic("could not append to emitted_code in __emit_program\n");
 
-    // hoist, struct | enum | fn def
+    // default functions
+    if(emitter.collect_default_functions) {
+        emitted_code.appendSlice(" // -+-+-+-+-+-+-+-+-+ DEFAULT-FUNCTIONS +-+-+-+-+-+-+-+-+- //\n") catch @panic("could not append to emitted_code in __emit_program\n");
+        emitted_code.appendSlice(emitter.default_functions()) catch @panic("could not append to emitted_code in __emit_program\n");
+        emitted_code.appendSlice(" // -+-+-+-+-+-+-+-+-+ DEFAULT-FUNCTIONS +-+-+-+-+-+-+-+-+- //\n\n") catch @panic("could not append to emitted_code in __emit_program\n");
+
+    }
+    // hoist, struct | fn def (enums can not be hoisted)
     emitted_code.appendSlice("// -+-+-+-+-+-+-+-+-+-+ HOISTED DECLARATIONS +-+-+-+-+-+-+-+-+-+-+-//\n") catch @panic("could not append to emitted_code in __emit_program\n");
     emitted_code.appendSlice(__c_hoist_declarations(program)) catch @panic("could not append to emitted_code in __emit_program\n");
     emitted_code.appendSlice("// -+-+-+-+-+-+-+-+-+-+ HOISTED DECLARATIONS +-+-+-+-+-+-+-+-+-+-+-//\n\n") catch @panic("could not append to emitted_code in __emit_program\n");
@@ -170,7 +195,10 @@ pub fn __c_hoist_declarations(program: PROGRAM) BUFFER {
     for(program.items) |some_def| {
         switch(some_def) {
             .struct_def => return_buffer.appendSlice(__c_struct_def_transform(some_def, HOIST)) catch @panic("could not append to return_buffer in __c_hoist_declarations\n"),
-            .enum_def => return_buffer.appendSlice(__c_enum_def_transform(some_def, HOIST)) catch @panic("could not append to return_buffer in __c_hoist_declarations\n"),
+
+            // enum def can not be hoisted in C++
+            .enum_def => {},
+
             .function_def => return_buffer.appendSlice(__c_fn_def_transform(some_def, HOIST)) catch @panic("could not append to return_buffer in __c_hoist_declarations\n"),
         }
     }
@@ -324,6 +352,33 @@ pub fn __c_NULL_expr_transform(_: EXPRESSIONS) BUFFER {
 
 }
 
+pub fn __c_casted_expr_transform(expr: EXPRESSIONS) BUFFER {
+    var return_buffer = std.ArrayList(u8).init(default_allocator);
+
+    const cast_type = __c_types_transform(expr.casted_expr.cast_to, !IS_STRUCT_DEF);
+    const expr_buffer = __c_expr_transform(expr.casted_expr.inner_expr.*);
+
+    return_buffer.appendSlice("( ") catch @panic("could not append to __c_casted_expr_transform\n");
+    return_buffer.appendSlice(cast_type) catch @panic("could not append to __c_casted_expr_transform\n");
+    return_buffer.appendSlice(" )") catch @panic("could not append to __c_casted_expr_transform\n");
+    return_buffer.appendSlice("( ") catch @panic("could not append to __c_casted_expr_transform\n");
+    return_buffer.appendSlice(expr_buffer) catch @panic("could not append to __c_casted_expr_transform\n");
+    return_buffer.appendSlice(" )") catch @panic("could not append to __c_casted_expr_transform\n");
+
+    return return_buffer.toOwnedSlice() catch @panic("could not toOwnedSlice return_buffer\n");
+
+}
+
+// 
+// the workaround expr to literal defined in (./AST.zig)
+pub fn __c_workaround_expr_transform(expr: EXPRESSIONS) BUFFER {
+    var return_buffer = std.ArrayList(u8).init(default_allocator);
+
+    return_buffer.appendSlice(__c_literal_transform(expr.workaround_expr.inner_literal)) catch @panic("could not append to __c_workaround_expr_transform\n");
+
+    return return_buffer.toOwnedSlice() catch @panic("could not toOwnedSlice return_buffer\n");
+}
+
 //
 // return C_equivalent for all types of expr
 pub fn __c_expr_transform(expr: EXPRESSIONS) BUFFER {
@@ -350,8 +405,15 @@ pub fn __c_expr_transform(expr: EXPRESSIONS) BUFFER {
         .struct_expr =>
         return_buffer.appendSlice(__c_struct_expr_transform(expr)) catch @panic("could not appendSlice to return_buffer in __c_expr_transform\n"),
 
+        .casted_expr =>
+        return_buffer.appendSlice(__c_casted_expr_transform(expr)) catch @panic("could not appendSlice to return_buffer in __c_expr_transform\n"),
+
+        .workaround_expr => 
+        return_buffer.appendSlice(__c_workaround_expr_transform(expr)) catch @panic("could not appendSlice to return_buffer in __c_expr_transform\n"),
+
         .NULL =>
         return_buffer.appendSlice(__c_NULL_expr_transform(expr)) catch @panic("could not appendSlice to return_buffer in __c_expr_transform\n"),
+
 
     }
 
@@ -636,7 +698,7 @@ pub fn __c_conditional_stmt_transform(stmt: STATEMENTS) BUFFER {
     if(cond_stmt.else_block) |else_blk| {
         
         // else-header 
-        return_buffer.appendSlice("else if( ") catch @panic("could not append to return_buffer in __c_conditional_stmt_transform\n"); 
+        return_buffer.appendSlice("else ") catch @panic("could not append to return_buffer in __c_conditional_stmt_transform\n"); 
 
         //else-block
         return_buffer.appendSlice(__c_block_stmt_transform(else_blk.*)) catch @panic("could not append to return_buffer in __c_conditional_stmt_transform\n"); 
@@ -656,6 +718,10 @@ pub fn __c_assign_stmt_transform(stmt: STATEMENTS) BUFFER {
 
     const lvalue_type = __c_types_transform(stmt.assignment.lvalue_type.*, !IS_STRUCT_DEF);
     const lvalue_name = stmt.assignment.lvalue_name;
+    
+    if(stmt.assignment.lvalue_static) {
+        return_buffer.appendSlice("static ") catch @panic("could not append to return_buffer in __c_assign_stmt_transform\n"); 
+    }
 
     return_buffer.appendSlice(lvalue_type) catch @panic("could not append to return_buffer in __c_assign_stmt_transform\n"); 
     return_buffer.appendSlice(" ") catch @panic("could not append to return_buffer in __c_assign_stmt_transform\n"); 
@@ -817,6 +883,10 @@ pub fn __c_enum_def_transform(__enum: DEFINITIONS, is_hoist: bool) BUFFER {
 // C_equiv of O_fn_def
 pub fn __c_fn_def_transform(func: DEFINITIONS, is_hoist: bool) BUFFER {
     var return_buffer = std.ArrayList(u8).init(default_allocator);
+    
+    if(func.function_def.fn_inline) {
+        return_buffer.appendSlice("inline ") catch @panic("could not append to return_buffer in __c_fn_def_transform\n");
+    }
 
     return_buffer.appendSlice("auto ") catch @panic("could not append to return_buffer in __c_fn_def_transform\n");
     return_buffer.appendSlice(func.function_def.fn_name) catch @panic("could not append to return_buffer in __c_fn_def_transform\n");
@@ -1127,6 +1197,18 @@ pub fn main() void {
 //     __main_emit_program(
 //         "exa.ox",
 //     );
+//
+//     print("passed..\n\n", .{});
+// }
+//
+// test {
+//     print("-- TEST CAST_EXPR\n", .{});
+//
+//     var parser = Parser.init_for_tests("#cast (i32) 1 + 1;");
+//     const expr = parser.parse_cast_expr();
+//
+//     const p = __c_casted_expr_transform(expr.*);
+//     print("{s}\n", .{p});
 //
 //     print("passed..\n\n", .{});
 // }

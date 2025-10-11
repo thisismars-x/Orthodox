@@ -13,6 +13,7 @@ pub usingnamespace errors;
 const errors = @import("./errors.zig");
 const LexError = errors.LexError;
 const LexErrorContext = errors.LexErrorContext;
+const exit_with_msg = errors.exit_with_msg;
 
 const std = @import("std");
 const print = std.debug.print;
@@ -70,9 +71,17 @@ pub const StreamLexer = struct {
     //
     // prepare to run tokenizer on a file by extracting its content
     pub fn init_with_file(filename: []const u8) Self {
-        var source = std.fs.cwd().readFileAlloc(Self.default_allocator, filename, Self.MaxSourceSizeLimit) catch |err| {
-            print("ERROR opening file with StreamLexer.init_with_file :: filename {s}, error {}\n", .{ filename, err });
-            @panic("Could not open file, in init_with_file\n");
+        var source = std.fs.cwd().readFileAlloc(Self.default_allocator, filename, Self.MaxSourceSizeLimit) catch {
+            exit_with_msg(
+            \\ ........lex-error (./lexer.zig)
+            \\ ........file can not be found
+            \\ ........diagnostics::
+            \\ ........
+            \\ ........file could not be opened for reading
+            );
+
+            // removing this gives error
+            @panic("");
         };
 
         // do not delegate this to lex-ing process
@@ -299,6 +308,9 @@ pub const StreamLexer = struct {
                 token.lexeme = null;
             } else if (std.mem.eql(u8, lexeme, "#alias")) {
                 token.kind = .directive_alias;
+                token.lexeme = null;
+            } else if (std.mem.eql(u8, lexeme, "#cast")) {
+                token.kind = .directive_cast;
                 token.lexeme = null;
             } else if (std.mem.eql(u8, lexeme, "#mod")) {
                 token.kind = .directive_mod;
