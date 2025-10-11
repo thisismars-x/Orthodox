@@ -175,4 +175,5 @@ ABSTRACT_SYNTAX_TREE        ./AST.zig
 PARSER                      ./Parser.zig
 SCOPE_CHECK                 ./ScopeLeakage.zig
 COMPILER_DIRECTIVES         ./CompilerDirectives.zig
+CODE_GENERATION             ./CodeGen.zig
 ```
