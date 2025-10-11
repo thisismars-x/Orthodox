@@ -1,3 +1,4 @@
+
 # Orthodox
 
 `Compiled, statically typed, simple language.`
@@ -16,6 +17,9 @@ Orthodox:
 First looks:
 
 ```orthodox
+//
+// To run this program, save this file as 'exa.ox'
+// and run 'orthodox exa.ox --run-immediate'
 main :: proc() int {
 
     // this gets logged to stdout
@@ -40,5 +44,17 @@ main :: proc() int {
     }
 
 };
+```
 
+Installation:
+```bash
+# The Orthodox compiler, works on all Linux platforms
+#
+# Before preceeding with the installation, make sure to have
+# at least zig 14.0 and the clang++ compiler toolchain.
+
+# Installation
+git clone https://github.com/thisismars-x/Orthodox.git
+cd Orthodox
+sudo ./install.sh
 ```
