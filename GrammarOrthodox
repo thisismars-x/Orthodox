@@ -29,6 +29,7 @@ grouped_expr -> "(" expr ")"
 literals    -> number | string | IDENTIFIER | member_access | array_access
 
 member_access ->  IDENTIFIER [ "." IDENTIFIER ]+
+array_access  -> literals "[" EXPR "]"
 
 ------------------------------------end
 
@@ -36,9 +37,9 @@ member_access ->  IDENTIFIER [ "." IDENTIFIER ]+
 
 -- top-lvl records && function definitions ----->
 
-struct-def   ->  IDENTIFIER "::" "struct" "=" "{" [ IDENTIFIER "::" TYPE ]* "}"
-enum-def     ->  IDENTIFIER "::" "enum" "=" "{" [ IDENTIFIER ]* "}"
-function-def ->  IDENTIFIER "::" FUNCTION-TYPE "=" block
+struct-def   ->  IDENTIFIER "::" "struct" "=" "{" [ IDENTIFIER "::" TYPE ]* "}" ";"
+enum-def     ->  IDENTIFIER "::" "enum" "=" "{" [ IDENTIFIER ]* "}" ";"
+function-def ->  IDENTIFIER "::" FUNCTION-TYPE "=" block ";"
 
 ----------------------------------------------end
 

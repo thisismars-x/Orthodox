@@ -794,7 +794,7 @@ pub const StreamLexer = struct {
 //////////////////////////////////////////////////////////////////
 
 // test "next token" {
-//     var lexer = StreamLexer.init_with_file("./example.ox");
+//     var lexer = StreamLexer.init_with_file("./exa.ox");
 //
 //     while (true) {
 //         const token = lexer.next_token();
@@ -811,7 +811,7 @@ pub const StreamLexer = struct {
 // }
 //
 // test "scan string" {
-//     var lexer = StreamLexer.raw_init("\"this is a string that will stretch \n multiple lines so what\"", "opt-file");
+//     var lexer = StreamLexer.raw_init("\"this is a string that will stretch multiple lines so what\"", "opt-file");
 //     const token = lexer.scan_string();
 //
 //     print("Token-id: {}, Token-lexeme {s}\n", .{ token.kind, token.lexeme.? });

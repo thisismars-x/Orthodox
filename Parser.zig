@@ -27,6 +27,9 @@ pub usingnamespace TYPES;
 const DEFAULT_INTEGER_TYPE_STRING = "i32";
 const DEFAULT_FLOAT_TYPE_STRING   = "f64";
 
+const errors = @import("./errors.zig");
+const exit_with_msg = errors.exit_with_msg;
+
 pub const Parser = struct {
 
     //
@@ -144,7 +147,14 @@ pub const Parser = struct {
                 },
 
                 else =>
-                @panic("only, struct | enum | function def are allowed in a program\n"),
+                exit_with_msg(
+                \\ .........parser-error (./Parser.zig)
+                \\ .........encountered unrecognized definitions in program
+                \\ .........diagnostics:: 
+                \\ .........
+                \\ .........only struct, enum, function definitions are recognized in a program
+                \\ .........read definition grammar at (./GrammarOrthodox)
+                ),
 
             }
 
@@ -354,7 +364,15 @@ pub const Parser = struct {
                 }
 
                 if(self.expect_token(.base_right_bracket) == false) {
-                    @panic("unterminated '[' in array type, originating in parse_types\n");
+                    exit_with_msg(
+                    \\ .........parser-error (./Parser.zig)
+                    \\ .........array type is not properly defined
+                    \\ .........diagnostics::
+                    \\ .........
+                    \\ .........unterminated '[' in array_type
+                    \\ .........recognized array_types realize the form in (./GrammarOrthodox)
+                    \\ .........array_type -> "mut"? "[" SIZE "]" type
+                    );
                 }
 
                 self.advance_token();
@@ -456,8 +474,13 @@ pub const Parser = struct {
             ///////////// FUNCTION TYPES ////////////////////////// end ////
 
             else => {
-                print("got :: {any}\n", .{tok});
-                @panic("panic in parse_types\n");
+                exit_with_msg(
+                \\ .........parser-error (./Parser.zig)
+                \\ .........unrecognized token
+                \\ .........diagnostics::
+                \\ .........
+                \\ .........received unrecognized token involved in a certain type
+                );
             },
         }
 
@@ -533,7 +556,18 @@ pub const Parser = struct {
 
                     while(true) {
                         const field_name = self.peek_token();
-                        if(self.expect_token(.base_identifier) == false) @panic("expected member-name after '.' in member-access\n");
+                        if(self.expect_token(.base_identifier) == false) {
+                            exit_with_msg(
+                            \\ .........parser-error (./Parser.zig)
+                            \\ .........in member name access
+                            \\ .........diagnostics::
+                            \\ .........
+                            \\ .........expected IDENTIFIER after '.' token in struct/enum member access
+                            \\ .........member access is of form - (./GrammarOrthodox)
+                            \\ .........member_access ->  IDENTIFIER [ "." IDENTIFIER ]+
+                            );
+                        }
+
 
                         member_names.append(field_name.lexeme.?) catch @panic("could not extend member_names std.ArrayList in parse_literals\n");
                         self.advance_token();
@@ -591,7 +625,15 @@ pub const Parser = struct {
             },
 
             else => {
-                @panic("non-literal type received in parse_literals\n");
+                exit_with_msg(
+                \\ .........parser-error (./Parser.zig)
+                \\ .........wrong literal type received
+                \\ .........diagnostics::
+                \\ .........
+                \\ .........unrecognized literal type received
+                \\ .........recognized types : (./AST.zig)
+                \\ .........number, char, string, array, struct/enum member access, variables, pointer deref, array ref, array access
+                );
             },
         }
 
@@ -653,10 +695,27 @@ pub const Parser = struct {
 
         }
 
-        if(is_struct_empty) @panic("struct with no fields is not allowed\n");
+        if(is_struct_empty) {
+            exit_with_msg(
+            \\ .........parser-error (./Parser.zig)
+            \\ .........struct empty
+            \\ .........diagnostics::
+            \\ .........
+            \\ .........struct defined with no fields
+            );
+        } 
 
         if(!self.expect_token(.base_semicolon)) {
-            @panic("struct-def should end with .base_semicolon");
+            exit_with_msg(
+            \\ .........parser-error (./Parser.zig)
+            \\ .........expected semicolon after struct definition
+            \\ .........diagnostics::
+            \\ .........
+            \\ .........struct, enum, fn, definitions require ';' at end
+            \\ .........in (./GrammarOrthodox)
+            \\ .........struct-def  ->  IDENTIFIER "::" "struct" "=" "{" [ IDENTIFIER "::" TYPE ]* "}" ";"
+            );
+
         }
 
         self.expect_advance_token(.base_semicolon);
@@ -700,10 +759,26 @@ pub const Parser = struct {
             self.expect_advance_token(.base_comma);
         }
 
-        if(enum_is_empty) @panic("enum with no fields is not allowed\n");
+        if(enum_is_empty) {
+            exit_with_msg(
+            \\ .........parser-error (./Parser.zig)
+            \\ .........enun empty
+            \\ .........diagnostics::
+            \\ .........
+            \\ .........enum defined with no fields
+            );
+        } 
 
         if(!self.expect_token(.base_semicolon)) {
-            @panic("enum-def must end with .base_semicolon");
+            exit_with_msg(
+            \\ .........parser-error (./Parser.zig)
+            \\ .........expected semicolon after enum definition
+            \\ .........diagnostics::
+            \\ .........
+            \\ .........enum, struct, fn, definitions require ';' at end
+            \\ .........in (./GrammarOrthodox)
+            \\ .........enum-def  ->  IDENTIFIER "::" "enum" "=" "{" [ IDENTIFIER ]* "}" ";"
+            );
         }
 
         self.expect_advance_token(.base_semicolon);
@@ -732,7 +807,15 @@ pub const Parser = struct {
         const fn_block = self.parse_block();
 
         if(!self.expect_token(.base_semicolon)) {
-            @panic("function-def must end with .base_semicolon");
+            exit_with_msg(
+            \\ .........parser-error (./Parser.zig)
+            \\ .........expected semicolon after function definition
+            \\ .........diagnostics::
+            \\ .........
+            \\ .........fn, struct, enum, definitions require ';' at end
+            \\ .........in (./GrammarOrthodox)
+            \\ .........function-def ->  IDENTIFIER "::" FUNCTION-TYPE "=" block ";"
+            );
         }
 
         self.expect_advance_token(.base_semicolon);
@@ -774,7 +857,14 @@ pub const Parser = struct {
         const op_expr_ptr = Self.default_allocator.create(EXPRESSIONS) catch @panic("Unable to allocate memory in parse_op_expr\n");
 
         if(!self.peek_is_operator()) {
-            @panic("parse_op_expr requires operator, at first");
+            exit_with_msg(
+            \\ .........parser-error (./Parser.zig)
+            \\ .........expected operator
+            \\ .........diagnostics::
+            \\ .........
+            \\ .........recognized operator_expr(op_expr in ./AST.zig), but did not recognize operator
+            );
+          
         }
 
         var operator: OPERATORS = undefined;
@@ -854,7 +944,14 @@ pub const Parser = struct {
             },
 
             else =>
-            @panic("invalid operator in parse_fn_call_expr\n"),
+            exit_with_msg(
+            \\ .........parser-error (./Parser.zig)
+            \\ .........expected operator
+            \\ .........diagnostics::
+            \\ .........
+            \\ .........recognized operator_expr(op_expr in ./AST.zig), but did not recognize operator
+            ),
+
         }
 
         self.advance_token();
@@ -1048,7 +1145,8 @@ pub const Parser = struct {
             {
                 self.expect_advance_token(.base_right_paren);
 
-                if(self.peek_is_operator()) expr_ptr = self.parse_expr();
+                // uncommenting this breaks fn_call_expr
+                // if(self.peek_is_operator()) expr_ptr = self.parse_expr();
             },
 
             .base_add, .base_sub,
@@ -1077,10 +1175,13 @@ pub const Parser = struct {
             self.advance_token(),
 
             else =>
-            {
-                print("got token :: {any}\n", .{tok});
-                @panic("unexpected token in parse_expr\n");
-            },
+            exit_with_msg(
+            \\ .........parser-error (./Parser.zig)
+            \\ .........unexpected token
+            \\ .........diagnostics::
+            \\ .........
+            \\ .........expected expression, but did not recognize token(./AST.zig)
+            ),
 
         }
 
@@ -1098,7 +1199,16 @@ pub const Parser = struct {
     pub fn parse_for_stmt(self: *Self) *STATEMENTS {
 
         self.expect_advance_token(.keyword_for);
-        if(!self.expect_token(.base_identifier)) @panic("in for-loop, expected, identifier_name after .keyword_for\n");
+        if(!self.expect_token(.base_identifier)) { 
+            exit_with_msg(
+            \\ .........parser-error (./Parser.zig)
+            \\ .........expected IDENTIFIER in for-loop
+            \\ .........diagnostics::
+            \\ .........
+            \\ .........for-loop adhere to this pattern - (./GrammarOrthodox)
+            \\ .........for IDENTIFIER in EXPR1 : EXPR2 : BLOCK
+            );
+        }
 
         const identifier_name = self.peek_token().lexeme.?;
         self.expect_advance_token(.base_identifier);
@@ -1196,8 +1306,7 @@ pub const Parser = struct {
 
     pub fn parse_var_update_stmt(self: *Self) STATEMENTS {
 
-        const lvalue_name = self.peek_token().lexeme.?;
-        self.expect_advance_token(.base_identifier);
+        const lvalue_name = self.parse_literals();
 
         const update_op = self.which_update_operator();
 
@@ -1336,12 +1445,13 @@ pub const Parser = struct {
                         const assign_stmt = self.parse_assign_stmt();
                         block_elem.append(assign_stmt) catch @panic("can not append to block_elem\n");
 
-                    } else if(self.peek_is_operator()) {
+                    } else if(self.peek_is_operator() or (self.expect_token(.base_dot))) { // update by member access : a.b += 20;
                         const which_op = self.peek_token().kind;
                         self.advance_token();
 
                         if(which_op != .base_assign) {
-                            if(self.expect_token(.base_assign)) { // update
+                            //    VARIABLE UPDATE                           STRUCT MEMBER UPDATE
+                            if(self.expect_token(.base_assign) or self.expect_token(.base_identifier)) {
                                 self.putback_token();
                                 self.putback_token();
                                 const var_stmt = self.parse_var_update_stmt();
@@ -1374,6 +1484,14 @@ pub const Parser = struct {
 
                         block_elem.append(expr_in_block) catch @panic("can not append to block_elem\n");
                     }
+                },
+
+                // update statements like so,
+                // ^a >>= 32;
+                .type_pointer => 
+                {
+                    const var_stmt = self.parse_var_update_stmt();
+                    block_elem.append(var_stmt) catch @panic("can not append to block_elem\n");
                 },
 
                 // for-stmt
@@ -1507,8 +1625,16 @@ pub const Parser = struct {
     pub fn expect_advance_token(self: *Self, kind: token_id) void {
         if(self.expect_token(kind)) return self.advance_token();
 
-        print("Expected {any}, got {any}\n", .{kind, self.peek_token().kind});
-        @panic("expect_token returned false in expect_advance_token\n");
+        exit_with_msg(
+        \\ .........parser-error (./Parser.zig)
+        \\ .........wrong expected token
+        \\ .........diagnostics::
+        \\ .........
+        \\ .........expected token of some kind, but received of different kind in (./Parser.zig)
+        );
+
+        // print("Expected {any}, got {any}\n", .{kind, self.peek_token().kind});
+        // @panic("expect_token returned false in expect_advance_token\n");
     }
 
     //
@@ -1576,7 +1702,7 @@ pub const Parser = struct {
 //     print("passed..\n\n", .{});
 //
 // }
-//
+// //
 // test {
 //     print("-- TEST POINTER TYPES\n", .{});
 //     var parser = Parser.init_for_tests("mut^ [100]some_struct");
@@ -1659,7 +1785,7 @@ pub const Parser = struct {
 //     const loop_parsed = parsed.loop_stmt.loop_block.block.inner_elements.items[0];
 //
 //     print("<{s}> <{any}> <{s}> <{any}> <{s}>\n", .{
-//         loop_parsed.update.lvalue_name,
+//         loop_parsed.update.lvalue_name.variable.inner_value,
 //         loop_parsed.update.update_op,
 //         loop_parsed.update.rvalue_expr.literal_expr.inner_literal.variable.inner_value,
 //         loop_parsed.update.rvalue_expr.literal_expr.inner_expr.operator_expr.inner_operator,
@@ -1687,7 +1813,7 @@ pub const Parser = struct {
 //
 //     const for_parsed_blk = for_parsed.for_block.block.inner_elements.items[0];
 //     print("<{s}> <{any}> <{s}> <{any}> <{s}>\n", .{
-//         for_parsed_blk.update.lvalue_name,
+//         for_parsed_blk.update.lvalue_name.variable.inner_value,
 //         for_parsed_blk.update.update_op,
 //         for_parsed_blk.update.rvalue_expr.literal_expr.inner_literal.variable.inner_value,
 //         for_parsed_blk.update.rvalue_expr.literal_expr.inner_expr.operator_expr.inner_operator,
@@ -1880,7 +2006,7 @@ pub const Parser = struct {
 //
 //     print("passed..\n\n", .{});
 // }
-//
+// //
 // test {
 //     print("-- TEST PARSE TOP_LVL ENUM_DEF\n", .{});
 //
@@ -1965,11 +2091,11 @@ pub const Parser = struct {
 // test {
 //     print("-- TEST COMPLETE_PROGRAM\n", .{});
 //
-//     var parser = Parser.raw_init_with_file("./file.ox");
+//     var parser = Parser.raw_init_with_file("./exa.ox");
 //     const parsed = parser.parse_program();
 //
 //     print("len :: {d}\n", .{parsed.items.len});
-//     print("{any}\n", .{parsed.items[4]});
+//     print("{any}\n", .{parsed.items[1]});
 //     print("passed..\n\n", .{});
 // }
 //

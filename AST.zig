@@ -139,13 +139,14 @@ pub const STATEMENTS = union(enum) {
     },
 
     assignment: struct {
-        lvalue_name: []const u8,
+        lvalue_name: []const u8, // assignment does not have to weary of LITERALS- a.b :: i32; makes little sense
         lvalue_type: *TYPES,
         rvalue_expr: ?*EXPRESSIONS,
     },
 
     update: struct {
-        lvalue_name: []const u8,
+        // lvalue_name: []const u8, // lvalue name should be LITERALS, as ^a.b = 20; should work
+        lvalue_name: LITERALS,
         update_op: UPDATE_OPERATORS,
         rvalue_expr: *EXPRESSIONS,
     },

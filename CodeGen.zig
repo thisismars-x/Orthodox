@@ -231,7 +231,7 @@ pub fn __c_fn_call_expr_transform(expr: EXPRESSIONS) BUFFER {
     return_buffer.appendSlice(fn_name) catch @panic("could not append to return_buffer in __c_fn_call_expr_transform\n");
 
     // left_paren of fn_Call
-    return_buffer.appendSlice(" ( ") catch @panic("could not append to return_buffer in __c_fn_call_expr_transform\n");
+    return_buffer.appendSlice("(") catch @panic("could not append to return_buffer in __c_fn_call_expr_transform\n");
 
     const inner_expr_list = expr.fn_call_expr.inner_expr_list.items;
     for(inner_expr_list) |some_expr| {
@@ -246,7 +246,7 @@ pub fn __c_fn_call_expr_transform(expr: EXPRESSIONS) BUFFER {
     }
 
     // close left paren of fn_Call
-    return_buffer.appendSlice(" ) ") catch @panic("could not append to return_buffer in __c_fn_call_expr_transform\n");
+    return_buffer.appendSlice(")") catch @panic("could not append to return_buffer in __c_fn_call_expr_transform\n");
 
 
     const then_expr = expr.fn_call_expr.then_expr;
@@ -447,30 +447,30 @@ pub fn __c_literal_transform(literal: LITERALS) BUFFER {
     switch(literal) {
 
         .number =>
-        std.fmt.bufPrint(&buffer, " {s} ", .{literal.number.inner_value}) catch @panic("could not format string, maybe increase buffer buffer size\n"),
+        std.fmt.bufPrint(&buffer, "{s}", .{literal.number.inner_value}) catch @panic("could not format string, maybe increase buffer buffer size\n"),
         
         .string =>
-        std.fmt.bufPrint(&buffer, " {s} ", .{literal.string.inner_value}) catch @panic("could not format string, maybe increase buffer buffer size\n"),
+        std.fmt.bufPrint(&buffer, "{s}", .{literal.string.inner_value}) catch @panic("could not format string, maybe increase buffer buffer size\n"),
 
         .char => 
-        std.fmt.bufPrint(&buffer, " {s} ", .{literal.char.inner_value}) catch @panic("could not format string, maybe increase buffer buffer size\n"),
+        std.fmt.bufPrint(&buffer, "{s}", .{literal.char.inner_value}) catch @panic("could not format string, maybe increase buffer buffer size\n"),
 
         .variable =>
-        std.fmt.bufPrint(&buffer, " {s} ", .{literal.variable.inner_value}) catch @panic("could not format string, maybe increase buffer buffer size\n"),
+        std.fmt.bufPrint(&buffer, "{s}", .{literal.variable.inner_value}) catch @panic("could not format string, maybe increase buffer buffer size\n"),
 
         .member_access =>
-        std.fmt.bufPrint(&buffer, " {s} ", .{structure_member_access(literal)}) catch @panic("could not format string, maybe increase buffer buffer size\n"),
+        std.fmt.bufPrint(&buffer, "{s}", .{structure_member_access(literal)}) catch @panic("could not format string, maybe increase buffer buffer size\n"),
 
         .pointer_deref =>
         ptr_blk: {
             const ptr_literal = __c_literal_transform(literal.pointer_deref.deref_literal.*);
-            break :ptr_blk std.fmt.bufPrint(&buffer, " *{s} ", .{ptr_literal}) catch @panic("could not format string, maybe increase buffer buffer size\n");
+            break :ptr_blk std.fmt.bufPrint(&buffer, "*{s}", .{ptr_literal}) catch @panic("could not format string, maybe increase buffer buffer size\n");
         },
 
         .variable_ref =>
         ref_blk: {
             const ref_literal = __c_literal_transform(literal.variable_ref.ref_literal.*);
-            break :ref_blk std.fmt.bufPrint(&buffer, " &{s} ", .{ref_literal}) catch @panic("could not format string, maybe increase buffer buffer size\n");
+            break :ref_blk std.fmt.bufPrint(&buffer, "&{s}", .{ref_literal}) catch @panic("could not format string, maybe increase buffer buffer size\n");
         },
 
         .array_access =>
@@ -568,7 +568,7 @@ pub fn __c_for_stmt_transform(stmt: STATEMENTS) BUFFER {
 
     return_buffer.appendSlice("for(int ") catch @panic("could not append to return_buffer in __c_for_stmt_transform\n");
     return_buffer.appendSlice(for_stmt.identifier_name) catch @panic("could not append to return_buffer in __c_for_stmt_transform\n");
-    return_buffer.append('=') catch @panic("could not append to return_buffer in __c_for_stmt_transform\n");
+    return_buffer.appendSlice(" =") catch @panic("could not append to return_buffer in __c_for_stmt_transform\n");
     return_buffer.appendSlice(__c_expr_transform(for_stmt.range_expr1.*)) catch @panic("could not append to return_buffer in __c_for_stmt_transform\n");
     return_buffer.appendSlice("; ") catch @panic("could not append to return_buffer in __c_for_stmt_transform\n");
 
@@ -678,7 +678,7 @@ pub fn __c_assign_stmt_transform(stmt: STATEMENTS) BUFFER {
 pub fn __c_update_stmt_transform(stmt: STATEMENTS) BUFFER {
     var return_buffer = std.ArrayList(u8).init(default_allocator);
 
-    return_buffer.appendSlice(stmt.update.lvalue_name) catch @panic("could not append to return_buffer in __c_update_stmt_transform\n");
+    return_buffer.appendSlice(__c_literal_transform(stmt.update.lvalue_name)) catch @panic("could not append to return_buffer in __c_update_stmt_transform\n");
     return_buffer.appendSlice(__c_update_operator_transform(stmt.update.update_op)) catch @panic("could not append to return_buffer in __c_update_stmt_transform\n");
     return_buffer.appendSlice(__c_expr_transform(stmt.update.rvalue_expr.*)) catch @panic("could not append to return_buffer in __c_update_stmt_transform\n");
     return_buffer.append(';') catch @panic("could not append to return_buffer in __c_update_stmt_transform\n");
@@ -1110,18 +1110,6 @@ pub fn main() void {
 // test {
 //     print("-- TEST EMIT_PROGRAM\n", .{});
 //
-//     var parser = Parser.raw_init_with_file("./file.ox");
-//     const program = parser.parse_program();
-//
-//
-//     print("{s}", .{__c_hoist_declarations(program)});
-//
-//     print("passed..\n\n", .{});
-// }
-//
-// test {
-//     print("-- TEST EMIT_PROGRAM\n", .{});
-//
 //     var parser = Parser.raw_init_with_file("./exa.ox");
 //     const program = parser.parse_program();
 //
@@ -1138,9 +1126,6 @@ pub fn main() void {
 //
 //     __main_emit_program(
 //         "exa.ox",
-//         "a.out",
-//         true,
-//         true,
 //     );
 //
 //     print("passed..\n\n", .{});

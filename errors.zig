@@ -2,7 +2,8 @@
 //////// LEX-ERROR ////////////////////////// START /////
 /////////////////////////////////////////////////////////
 
-const proc = @import("std").process;
+const std = @import("std");
+const proc = std.process;
 
 //
 // C style exit without unwinding the stack like @panic
@@ -33,6 +34,12 @@ pub const LexErrorContext = struct {
         };
     }
 };
+
+// simpleton error, throughout parser ----- end
+pub fn exit_with_msg(msg: []const u8) void {
+    std.debug.print("{s}\n", .{msg});
+    proc.exit(1);
+}
 
 /////////////////////////////////////////////////////////
 //////// LEX-ERROR ////////////////////////// END ///////
