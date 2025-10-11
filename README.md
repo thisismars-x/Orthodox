@@ -57,8 +57,6 @@ git clone https://github.com/thisismars-x/Orthodox.git
 cd Orthodox
 sudo ./install.sh
 ```
-Here is a concept logo:
-![orthodox](./orthodox.png)
 
 Some code:
 ```orthodox
